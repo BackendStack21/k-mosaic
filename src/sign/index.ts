@@ -24,24 +24,29 @@ import {
   type MOSAICSecretKey,
   type MOSAICKeyPair,
   type MOSAICSignature,
-} from '../types'
+} from '../types.js'
 
-import { getParams, validateParams } from '../core/params'
-import { shake256, hashConcat, hashWithDomain, sha3_256 } from '../utils/shake'
-import { secureRandomBytes } from '../utils/random'
-import { constantTimeEqual, zeroize } from '../utils/constant-time'
+import { getParams, validateParams } from '../core/params.js'
+import {
+  shake256,
+  hashConcat,
+  hashWithDomain,
+  sha3_256,
+} from '../utils/shake.js'
+import { secureRandomBytes } from '../utils/random.js'
+import { constantTimeEqual, zeroize } from '../utils/constant-time.js'
 
-import { slssKeyGen, slssSerializePublicKey } from '../problems/slss/index'
+import { slssKeyGen, slssSerializePublicKey } from '../problems/slss/index.js'
 
-import { tddKeyGen, tddSerializePublicKey } from '../problems/tdd/index'
+import { tddKeyGen, tddSerializePublicKey } from '../problems/tdd/index.js'
 
 import {
   egrwKeyGen,
   egrwSerializePublicKey,
   sl2ToBytes,
-} from '../problems/egrw/index'
+} from '../problems/egrw/index.js'
 
-import { computeBinding } from '../entanglement/index'
+import { computeBinding } from '../entanglement/index.js'
 
 // =============================================================================
 // Domain Separation Constants

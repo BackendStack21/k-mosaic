@@ -22,9 +22,9 @@ import type {
   SLSSPublicKey,
   SLSSSecretKey,
   SLSSCiphertext,
-} from '../../types'
-import { shake256, hashWithDomain } from '../../utils/shake'
-import { zeroize } from '../../utils/constant-time'
+} from '../../types.js'
+import { shake256, hashWithDomain } from '../../utils/shake.js'
+import { zeroize } from '../../utils/constant-time.js'
 
 // Domain separation constants (versioned for future-proofing)
 const DOMAIN_MATRIX = 'kmosaic-slss-matrix-v1'

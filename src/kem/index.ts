@@ -25,30 +25,35 @@ import {
   type MOSAICCiphertext,
   type EncapsulationResult,
   type SecurityAnalysis,
-} from '../types'
+} from '../types.js'
 
-import { getParams, validateParams } from '../core/params'
-import { shake256, hashConcat, hashWithDomain, sha3_256 } from '../utils/shake'
-import { secureRandomBytes, validateSeedEntropy } from '../utils/random'
+import { getParams, validateParams } from '../core/params.js'
+import {
+  shake256,
+  hashConcat,
+  hashWithDomain,
+  sha3_256,
+} from '../utils/shake.js'
+import { secureRandomBytes, validateSeedEntropy } from '../utils/random.js'
 import {
   constantTimeEqual,
   constantTimeSelect,
   zeroize,
-} from '../utils/constant-time'
+} from '../utils/constant-time.js'
 
 import {
   slssKeyGen,
   slssEncrypt,
   slssDecrypt,
   slssSerializePublicKey,
-} from '../problems/slss/index'
+} from '../problems/slss/index.js'
 
 import {
   tddKeyGen,
   tddEncrypt,
   tddDecrypt,
   tddSerializePublicKey,
-} from '../problems/tdd/index'
+} from '../problems/tdd/index.js'
 
 import {
   egrwKeyGen,
@@ -56,7 +61,7 @@ import {
   egrwDecrypt,
   egrwSerializePublicKey,
   sl2ToBytes,
-} from '../problems/egrw/index'
+} from '../problems/egrw/index.js'
 
 import {
   secretShareDeterministic,
@@ -66,7 +71,7 @@ import {
   verifyNIZKProof,
   serializeNIZKProof,
   deserializeNIZKProof,
-} from '../entanglement/index'
+} from '../entanglement/index.js'
 
 // Domain separation constants for security
 const DOMAIN_SLSS = 'kmosaic-kem-slss-v1'
