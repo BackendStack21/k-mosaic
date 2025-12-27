@@ -24,8 +24,8 @@ import type {
   EGRWSecretKey,
   EGRWCiphertext,
   SL2Element,
-} from '../../types'
-import { shake256, hashWithDomain, hashConcat } from '../../utils/shake'
+} from '../../types.js'
+import { shake256, hashWithDomain, hashConcat } from '../../utils/shake.js'
 
 // Domain separation constants
 const DOMAIN_START = 'kmosaic-egrw-start-v1'

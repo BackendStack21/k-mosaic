@@ -23,9 +23,9 @@ import type {
   TDDPublicKey,
   TDDSecretKey,
   TDDCiphertext,
-} from '../../types'
-import { shake256, hashWithDomain, hashConcat } from '../../utils/shake'
-import { zeroize } from '../../utils/constant-time'
+} from '../../types.js'
+import { shake256, hashWithDomain, hashConcat } from '../../utils/shake.js'
+import { zeroize } from '../../utils/constant-time.js'
 
 // Domain separation constants (versioned for future-proofing)
 const DOMAIN_FACTORS = 'kmosaic-tdd-factors-v1'

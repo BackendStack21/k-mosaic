@@ -10,8 +10,8 @@
  */
 
 import { randomBytes } from 'crypto'
-import { zeroize } from './constant-time'
-import { shake256 } from './shake'
+import { zeroize } from './constant-time.js'
+import { shake256 } from './shake.js'
 
 // ============================================================================
 // Domain Separation Constants (versioned for future compatibility)

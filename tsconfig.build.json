@@ -3,12 +3,12 @@
     // Environment setup & latest features
     "lib": ["ESNext"],
     "target": "ES2020",
-    "module": "ESNext",
+    "module": "NodeNext",
     "moduleDetection": "force",
     "allowJs": true,
 
-    // Module resolution
-    "moduleResolution": "node",
+    // Module resolution - NodeNext for proper Node.js ESM support
+    "moduleResolution": "NodeNext",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
 

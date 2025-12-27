@@ -8,6 +8,6 @@
  * - Constant-time operations for side-channel resistance
  */
 
-export * from './shake'
-export * from './random'
-export * from './constant-time'
+export * from './shake.js'
+export * from './random.js'
+export * from './constant-time.js'

@@ -9,7 +9,7 @@
  */
 
 import { createHash } from 'crypto'
-import { zeroize } from './constant-time'
+import { zeroize } from './constant-time.js'
 
 // ============================================================================
 // Domain Separation Constants (versioned for future compatibility)

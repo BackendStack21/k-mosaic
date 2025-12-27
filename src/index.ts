@@ -21,13 +21,13 @@
  * @version 0.1.0
  */
 
-import { SecurityLevel } from './types'
+import { SecurityLevel } from './types.js'
 
 // =============================================================================
 // Core Types
 // =============================================================================
 
-export { SecurityLevel } from './types'
+export { SecurityLevel } from './types.js'
 export type {
   MOSAICParams,
   SLSSParams,
@@ -45,13 +45,13 @@ export type {
   EGRWPublicKey,
   EGRWSecretKey,
   SL2Element,
-} from './types'
+} from './types.js'
 
 // =============================================================================
 // Core Parameters
 // =============================================================================
 
-export { getParams, validateParams, MOS_128, MOS_256 } from './core/params'
+export { getParams, validateParams, MOS_128, MOS_256 } from './core/params.js'
 
 // =============================================================================
 // KEM (Key Encapsulation Mechanism)
@@ -69,7 +69,7 @@ export {
   serializeCiphertext,
   deserializeCiphertext,
   analyzePublicKey,
-} from './kem/index'
+} from './kem/index.js'
 
 // =============================================================================
 // Digital Signatures
@@ -82,7 +82,7 @@ export {
   verify,
   serializeSignature,
   deserializeSignature,
-} from './sign/index'
+} from './sign/index.js'
 
 // =============================================================================
 // Utilities
@@ -93,16 +93,21 @@ export {
   sampleGaussianVector,
   randomSparseVector,
   randomVectorZq,
-} from './utils/random'
+} from './utils/random.js'
 
-export { shake256, sha3_256, hashConcat, hashWithDomain } from './utils/shake'
+export {
+  shake256,
+  sha3_256,
+  hashConcat,
+  hashWithDomain,
+} from './utils/shake.js'
 
 export {
   constantTimeEqual,
   constantTimeSelect,
   zeroize,
   SecureBuffer,
-} from './utils/constant-time'
+} from './utils/constant-time.js'
 
 // =============================================================================
 // Entanglement & Proofs
@@ -116,7 +121,7 @@ export {
   verifyCommitment,
   generateNIZKProof,
   verifyNIZKProof,
-} from './entanglement/index'
+} from './entanglement/index.js'
 
 // =============================================================================
 // Individual Problem Implementations (Advanced Usage)
@@ -128,7 +133,7 @@ export {
   slssDecrypt,
   slssSerializePublicKey,
   slssDeserializePublicKey,
-} from './problems/slss/index'
+} from './problems/slss/index.js'
 
 export {
   tddKeyGen,
@@ -136,7 +141,7 @@ export {
   tddDecrypt,
   tddSerializePublicKey,
   tddDeserializePublicKey,
-} from './problems/tdd/index'
+} from './problems/tdd/index.js'
 
 export {
   egrwKeyGen,
@@ -146,7 +151,7 @@ export {
   egrwDeserializePublicKey,
   bytesToSl2,
   sl2ToBytes,
-} from './problems/egrw/index'
+} from './problems/egrw/index.js'
 
 // =============================================================================
 // Convenience API
@@ -167,45 +172,45 @@ const crypto = {
   // KEM operations
   kem: {
     generateKeyPair: () =>
-      import('./kem/index').then((m) => m.generateKeyPair()),
-    encapsulate: (pk: import('./types').MOSAICPublicKey) =>
-      import('./kem/index').then((m) => m.encapsulate(pk)),
+      import('./kem/index.js').then((m) => m.generateKeyPair()),
+    encapsulate: (pk: import('./types.js').MOSAICPublicKey) =>
+      import('./kem/index.js').then((m) => m.encapsulate(pk)),
     decapsulate: (
-      ct: import('./types').MOSAICCiphertext,
-      sk: import('./types').MOSAICSecretKey,
-      pk: import('./types').MOSAICPublicKey,
-    ) => import('./kem/index').then((m) => m.decapsulate(ct, sk, pk)),
-    encrypt: (message: Uint8Array, pk: import('./types').MOSAICPublicKey) =>
-      import('./kem/index').then((m) => m.encrypt(message, pk)),
+      ct: import('./types.js').MOSAICCiphertext,
+      sk: import('./types.js').MOSAICSecretKey,
+      pk: import('./types.js').MOSAICPublicKey,
+    ) => import('./kem/index.js').then((m) => m.decapsulate(ct, sk, pk)),
+    encrypt: (message: Uint8Array, pk: import('./types.js').MOSAICPublicKey) =>
+      import('./kem/index.js').then((m) => m.encrypt(message, pk)),
     decrypt: (
       ciphertext: Uint8Array,
-      sk: import('./types').MOSAICSecretKey,
-      pk: import('./types').MOSAICPublicKey,
-    ) => import('./kem/index').then((m) => m.decrypt(ciphertext, sk, pk)),
+      sk: import('./types.js').MOSAICSecretKey,
+      pk: import('./types.js').MOSAICPublicKey,
+    ) => import('./kem/index.js').then((m) => m.decrypt(ciphertext, sk, pk)),
   },
 
   // Signature operations
   sign: {
     generateKeyPair: () =>
-      import('./sign/index').then((m) => m.generateKeyPair()),
+      import('./sign/index.js').then((m) => m.generateKeyPair()),
     sign: (
       message: Uint8Array,
-      sk: import('./types').MOSAICSecretKey,
-      pk: import('./types').MOSAICPublicKey,
-    ) => import('./sign/index').then((m) => m.sign(message, sk, pk)),
+      sk: import('./types.js').MOSAICSecretKey,
+      pk: import('./types.js').MOSAICPublicKey,
+    ) => import('./sign/index.js').then((m) => m.sign(message, sk, pk)),
     verify: (
       message: Uint8Array,
-      sig: import('./types').MOSAICSignature,
-      pk: import('./types').MOSAICPublicKey,
-    ) => import('./sign/index').then((m) => m.verify(message, sig, pk)),
+      sig: import('./types.js').MOSAICSignature,
+      pk: import('./types.js').MOSAICPublicKey,
+    ) => import('./sign/index.js').then((m) => m.verify(message, sig, pk)),
   },
 
   // Parameter sets
   params: {
     [SecurityLevel.MOS_128]: () =>
-      import('./core/params').then((m) => m.MOS_128),
+      import('./core/params.js').then((m) => m.MOS_128),
     [SecurityLevel.MOS_256]: () =>
-      import('./core/params').then((m) => m.MOS_256),
+      import('./core/params.js').then((m) => m.MOS_256),
   },
 }
 

@@ -12,9 +12,14 @@
  * - NIZK: Zero-knowledge via Fiat-Shamir with domain separation
  */
 
-import { shake256, hashConcat, hashWithDomain, sha3_256 } from '../utils/shake'
-import { secureRandomBytes } from '../utils/random'
-import { constantTimeEqual, zeroize } from '../utils/constant-time'
+import {
+  shake256,
+  hashConcat,
+  hashWithDomain,
+  sha3_256,
+} from '../utils/shake.js'
+import { secureRandomBytes } from '../utils/random.js'
+import { constantTimeEqual, zeroize } from '../utils/constant-time.js'
 
 // Domain separation constants for security
 const DOMAIN_SHARE = 'kmosaic-share-v1'

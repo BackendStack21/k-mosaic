@@ -2,6 +2,6 @@
  * Problems module exports
  */
 
-export * from './slss/index'
-export * from './tdd/index'
-export * from './egrw/index'
+export * from './slss/index.js'
+export * from './tdd/index.js'
+export * from './egrw/index.js'

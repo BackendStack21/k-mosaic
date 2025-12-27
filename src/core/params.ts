@@ -13,7 +13,7 @@
  * - EGRW: O(k) for path computation - FASTEST
  */
 
-import { type MOSAICParams, SecurityLevel } from '../types'
+import { type MOSAICParams, SecurityLevel } from '../types.js'
 
 /**
  * MOS-128: 128-bit post-quantum security
