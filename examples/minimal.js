@@ -1,21 +1,27 @@
 // Minimal example to test Node.js compatibility
 import { kemGenerateKeyPair, encapsulate, decapsulate } from '../lib/index.js';
 
-console.log('Testing kMOSAIC with Node.js...');
+console.log('Testing kMOSAIC with Node.js...\n');
 
 async function main() {
   try {
     // Generate a key pair
+    let start = performance.now();
     const keyPair = await kemGenerateKeyPair();
-    console.log('✓ Key pair generated');
+    let elapsed = (performance.now() - start).toFixed(2);
+    console.log(`✓ Key pair generated (${elapsed}ms)`);
 
     // Encapsulate a shared secret
+    start = performance.now();
     const { ciphertext, sharedSecret: senderSecret } = await encapsulate(keyPair.publicKey);
-    console.log('✓ Shared secret encapsulated');
+    elapsed = (performance.now() - start).toFixed(2);
+    console.log(`✓ Shared secret encapsulated (${elapsed}ms)`);
 
     // Decapsulate the shared secret
+    start = performance.now();
     const receiverSecret = await decapsulate(ciphertext, keyPair.secretKey, keyPair.publicKey);
-    console.log('✓ Shared secret decapsulated');
+    elapsed = (performance.now() - start).toFixed(2);
+    console.log(`✓ Shared secret decapsulated (${elapsed}ms)`);
 
     // Verify the secrets match
     const secretsMatch = senderSecret.every((byte, i) => byte === receiverSecret[i]);
