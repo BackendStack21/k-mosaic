@@ -1,0 +1,56 @@
+{
+  "name": "k-mosaic",
+  "version": "1.0.0",
+  "description": "kMOSAIC: A Novel Post-Quantum Cryptographic Algorithm with Heterogeneous Hardness",
+  "type": "module",
+  "main": "lib/index.js",
+  "module": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "bun test --coverage",
+    "bench": "bun run benchmarks/index.ts",
+    "example": "bun run examples/basic.ts",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --coverage",
+    "actions": "DOCKER_HOST=$(docker context inspect --format '{{.Endpoints.docker.Host}}') act",
+    "build": "tsc --project tsconfig.build.json",
+    "build:bun": "bun build src/index.ts --outdir lib --target bun",
+    "clean": "rm -rf lib/",
+    "prepublishOnly": "bun run clean && bun run build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "keywords": [
+    "cryptography",
+    "post-quantum",
+    "lattice",
+    "tensor",
+    "graph",
+    "kem",
+    "signature"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BackendStack21/k-mosaic.git"
+  },
+  "author": "Rolando Santamaria Maso <kyberneees@gmail.com>",
+  "license": "MIT",
+  "peerDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "prettier": "^3.6.2"
+  }
+}
