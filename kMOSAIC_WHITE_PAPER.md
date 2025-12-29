@@ -1499,7 +1499,7 @@ This is an experimental proposal intended to spark discussion about defense-in-d
 
 ### Academic Foundations
 
-1. Regev, O. (2005). "On Lattices, Learning with Errors, Random Linear Codes, and Cryptography". [J. ACM 56, 6, Article 34](https://dl.acm.org/doi/10.1145/1638593.1638599)
+1. Regev, O. (2005). "On Lattices, Learning with Errors, Random Linear Codes, and Cryptography". [STOC '05 (DOI)](https://doi.org/10.1145/1060590.1060603)
 2. Kiltz, E., et al. (2018). "A Modular Analysis of the Fujisaki-Okamoto Transformation". [TCC 2017](https://eprint.iacr.org/2017/604)
 3. Håstad, J. (1990). "Tensor Rank is NP-Complete". [J. Algorithms 11(4): 644-654](<https://doi.org/10.1016/0196-6774(90)90014-6>)
 4. Lubotzky, A., et al. (1988). "Ramanujan Graphs". [Combinatorica 8, 261–277](https://doi.org/10.1007/BF02126799)
@@ -1508,7 +1508,7 @@ This is an experimental proposal intended to spark discussion about defense-in-d
 
 ### Related Cryptographic Schemes
 
-7. NIST Post-Quantum Cryptography Standardization (2024). [NIST IR 8547](https://nvlpubs.nist.gov/nistpubs/ir/2024/NIST.IR.8547.pdf)
+7. NIST Post-Quantum Cryptography Standardization (2024). [NIST PQC Project](https://csrc.nist.gov/Projects/post-quantum-cryptography)
 8. Bernstein, D.J., Lange, T. (2017). "Post-Quantum Cryptography". [Nature 549, 188–194](https://www.nature.com/articles/nature23461)
 9. Ajtai, M. (1996). "Generating Hard Instances of Lattice Problems". [STOC '96](https://dl.acm.org/doi/10.1145/237814.237838)
 
