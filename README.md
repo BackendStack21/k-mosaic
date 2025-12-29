@@ -4,6 +4,8 @@
 
 A novel post-quantum cryptographic library that combines three heterogeneous hard problems with cryptographic entanglement for defense-in-depth security.
 
+> A faster Go-based implementation is available at [https://github.com/BackendStack21/k-mosaic-go](https://github.com/BackendStack21/k-mosaic-go)
+
 ## 🔐 Overview
 
 kMOSAIC is an experimental post-quantum cryptography scheme designed with a unique approach: rather than relying on a single mathematical hard problem, it cryptographically entangles **three independent hard problems** from different mathematical domains:
