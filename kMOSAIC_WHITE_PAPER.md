@@ -243,6 +243,481 @@ This binding value is incorporated into the parameters of all three problems, cr
 
 ---
 
+### 3.5 Operations Flow Diagrams
+
+#### 3.5.1 KEM Key Generation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         KEM KEY GENERATION                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  INPUT: Security Level (MOS-128 or MOS-256)                                │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 1: Generate Master Seed                                       │   │
+│  │  ─────────────────────────────                                      │   │
+│  │  seed ← 32 bytes from cryptographic RNG                             │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 2: Derive Component Seeds (Domain Separation)                 │   │
+│  │  ──────────────────────────────────────────────────                 │   │
+│  │  slss_seed ← SHAKE256("kmosaic-kem-slss-v1" || seed)               │   │
+│  │  tdd_seed  ← SHAKE256("kmosaic-kem-tdd-v1"  || seed)               │   │
+│  │  egrw_seed ← SHAKE256("kmosaic-kem-egrw-v1" || seed)               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│         ┌────────────────────┼────────────────────┐                        │
+│         ▼                    ▼                    ▼                        │
+│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐                 │
+│  │ SLSS KeyGen │      │ TDD KeyGen  │      │ EGRW KeyGen │                 │
+│  │ ─────────── │      │ ─────────── │      │ ─────────── │                 │
+│  │ Generate:   │      │ Generate:   │      │ Generate:   │                 │
+│  │ • Matrix A  │      │ • Tensor T  │      │ • Graph     │                 │
+│  │ • Vector s  │      │ • Factors   │      │ • Walk path │                 │
+│  │ • Target t  │      │   a,b,c     │      │ • Start/End │                 │
+│  └──────┬──────┘      └──────┬──────┘      └──────┬──────┘                 │
+│         │                    │                    │                        │
+│         └────────────────────┼────────────────────┘                        │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 3: Compute Binding Commitment                                 │   │
+│  │  ──────────────────────────────────                                 │   │
+│  │  binding ← SHA3-256(slss_pk || tdd_pk || egrw_pk)                  │   │
+│  │                                                                     │   │
+│  │  Purpose: Cryptographically binds all three components together    │   │
+│  │           so they cannot be separated or substituted               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│         ┌────────────────────┴────────────────────┐                        │
+│         ▼                                         ▼                        │
+│  ┌─────────────────────┐                   ┌─────────────────────┐         │
+│  │     PUBLIC KEY      │                   │     SECRET KEY      │         │
+│  │ ─────────────────── │                   │ ─────────────────── │         │
+│  │ • SLSS public key   │                   │ • SLSS secret (s)   │         │
+│  │ • TDD tensor (T)    │                   │ • TDD factors       │         │
+│  │ • EGRW endpoints    │                   │ • EGRW walk path    │         │
+│  │ • Binding hash      │                   │ • Master seed       │         │
+│  │ • Parameters        │                   │ • Public key hash   │         │
+│  └─────────────────────┘                   └─────────────────────┘         │
+│                                                                             │
+│  OUTPUT: (publicKey, secretKey)                                            │
+│  SIZES:  publicKey ~824KB (MOS-128), secretKey ~9KB                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.5.2 KEM Encapsulation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           KEM ENCAPSULATION                                 │
+│              (Bob creates shared secret for Alice)                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  INPUT: Alice's publicKey                                                  │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 1: Generate Ephemeral Secret                                  │   │
+│  │  ─────────────────────────────────                                  │   │
+│  │  m ← 32 bytes from cryptographic RNG                                │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 2: Derive Randomness                                          │   │
+│  │  ─────────────────────────                                          │   │
+│  │  randomness ← SHAKE256(m || binding)                                │   │
+│  │                                                                     │   │
+│  │  Purpose: Ties randomness to this specific public key               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 3: Secret Sharing (XOR-based 3-of-3)                          │   │
+│  │  ─────────────────────────────────────────                          │   │
+│  │  share1 ← SHAKE256("share-0" || randomness, 32)   [random]         │   │
+│  │  share2 ← SHAKE256("share-1" || randomness, 32)   [random]         │   │
+│  │  share3 ← m ⊕ share1 ⊕ share2                     [computed]       │   │
+│  │                                                                     │   │
+│  │  Property: Any 1 or 2 shares reveal ZERO information about m       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│         ┌────────────────────┼────────────────────┐                        │
+│         ▼                    ▼                    ▼                        │
+│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐                 │
+│  │SLSS Encrypt │      │ TDD Encrypt │      │EGRW Encrypt │                 │
+│  │ ─────────── │      │ ─────────── │      │ ─────────── │                 │
+│  │ Input:      │      │ Input:      │      │ Input:      │                 │
+│  │ • share1    │      │ • share2    │      │ • share3    │                 │
+│  │ • SLSS pk   │      │ • TDD pk    │      │ • EGRW pk   │                 │
+│  │             │      │             │      │             │                 │
+│  │ Output: c1  │      │ Output: c2  │      │ Output: c3  │                 │
+│  └──────┬──────┘      └──────┬──────┘      └──────┬──────┘                 │
+│         │                    │                    │                        │
+│         └────────────────────┼────────────────────┘                        │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 4: Generate NIZK Proof                                        │   │
+│  │  ───────────────────────────                                        │   │
+│  │  proof ← NIZKProve(m, [share1, share2, share3], [H(c1), H(c2), H(c3)])│  │
+│  │                                                                     │   │
+│  │  Purpose: Proves ciphertext was constructed correctly               │   │
+│  │           without revealing the secret m                            │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 5: Derive Shared Secret                                       │   │
+│  │  ────────────────────────────                                       │   │
+│  │  ciphertext_hash ← SHA3-256(c1 || c2 || c3 || proof)               │   │
+│  │  sharedSecret ← SHAKE256("kmosaic-kem-ss-v1" || m || ciphertext_hash)│  │
+│  │                                                                     │   │
+│  │  Purpose: Binds shared secret to the specific ciphertext           │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│         ┌────────────────────┴────────────────────┐                        │
+│         ▼                                         ▼                        │
+│  ┌─────────────────────┐                   ┌─────────────────────┐         │
+│  │    CIPHERTEXT       │                   │   SHARED SECRET     │         │
+│  │ ─────────────────── │                   │ ─────────────────── │         │
+│  │ • c1 (SLSS)         │                   │ 32 bytes            │         │
+│  │ • c2 (TDD)          │                   │                     │         │
+│  │ • c3 (EGRW)         │                   │ Used for symmetric  │         │
+│  │ • NIZK proof        │                   │ encryption (AES)    │         │
+│  └─────────────────────┘                   └─────────────────────┘         │
+│                                                                             │
+│  OUTPUT: (ciphertext, sharedSecret)                                        │
+│  Bob sends ciphertext to Alice, keeps sharedSecret                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.5.3 KEM Decapsulation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          KEM DECAPSULATION                                  │
+│              (Alice recovers shared secret)                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  INPUT: ciphertext, secretKey, publicKey                                   │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 1: Compute Implicit Rejection Value (Defense)                 │   │
+│  │  ──────────────────────────────────────────────────                 │   │
+│  │  reject_secret ← SHAKE256("reject" || seed || ciphertext)          │   │
+│  │                                                                     │   │
+│  │  Purpose: If decryption fails, return this instead of error        │   │
+│  │           Prevents timing attacks and chosen-ciphertext attacks    │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 2: Decrypt All Three Fragments                               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│         ┌────────────────────┼────────────────────┐                        │
+│         ▼                    ▼                    ▼                        │
+│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐                 │
+│  │SLSS Decrypt │      │ TDD Decrypt │      │EGRW Decrypt │                 │
+│  │ ─────────── │      │ ─────────── │      │ ─────────── │                 │
+│  │ Input:      │      │ Input:      │      │ Input:      │                 │
+│  │ • c1        │      │ • c2        │      │ • c3        │                 │
+│  │ • SLSS sk   │      │ • TDD sk    │      │ • EGRW sk   │                 │
+│  │             │      │             │      │             │                 │
+│  │ Output:     │      │ Output:     │      │ Output:     │                 │
+│  │  share1'    │      │  share2'    │      │  share3'    │                 │
+│  └──────┬──────┘      └──────┬──────┘      └──────┬──────┘                 │
+│         │                    │                    │                        │
+│         └────────────────────┼────────────────────┘                        │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 3: Reconstruct Ephemeral Secret                               │   │
+│  │  ────────────────────────────────────                               │   │
+│  │  m' ← share1' ⊕ share2' ⊕ share3'                                  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 4: Fujisaki-Okamoto Re-encryption Check                       │   │
+│  │  ────────────────────────────────────────────                       │   │
+│  │  (ciphertext', _) ← Encapsulate(publicKey, m')                     │   │
+│  │                                                                     │   │
+│  │  Check: Does ciphertext' match the original ciphertext?            │   │
+│  │                                                                     │   │
+│  │  Purpose: Detects tampering or malformed ciphertext                │   │
+│  │           Required for IND-CCA2 security                           │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 5: Verify NIZK Proof                                          │   │
+│  │  ─────────────────────────                                          │   │
+│  │  valid ← NIZKVerify(proof, [H(c1), H(c2), H(c3)], m')              │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 6: Constant-Time Selection                                    │   │
+│  │  ───────────────────────────────                                    │   │
+│  │  IF (ciphertext' == ciphertext) AND (NIZK valid):                  │   │
+│  │      sharedSecret ← SHAKE256("ss" || m' || H(ciphertext))          │   │
+│  │  ELSE:                                                              │   │
+│  │      sharedSecret ← reject_secret  (implicit rejection)            │   │
+│  │                                                                     │   │
+│  │  Note: Selection is constant-time to prevent timing attacks        │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│                   ┌─────────────────────┐                                  │
+│                   │   SHARED SECRET     │                                  │
+│                   │ ─────────────────── │                                  │
+│                   │ 32 bytes            │                                  │
+│                   │                     │                                  │
+│                   │ Matches Bob's if    │                                  │
+│                   │ ciphertext valid    │                                  │
+│                   └─────────────────────┘                                  │
+│                                                                             │
+│  OUTPUT: sharedSecret                                                      │
+│  Alice and Bob now share the same 32-byte secret                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.5.4 Digital Signature Generation Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        SIGNATURE GENERATION                                 │
+│              (Multi-Witness Fiat-Shamir Protocol)                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  INPUT: message, secretKey, publicKey                                      │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 1: Compute Message Hash                                       │   │
+│  │  ────────────────────────────                                       │   │
+│  │  μ ← SHA3-256(public_key_hash || message)                          │   │
+│  │                                                                     │   │
+│  │  Purpose: Binds signature to both message and public key           │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ╔═════════════════════════════════════════════════════════════════════╗   │
+│  ║  REJECTION SAMPLING LOOP (repeat until valid signature found)       ║   │
+│  ╠═════════════════════════════════════════════════════════════════════╣   │
+│  ║                                                                     ║   │
+│  ║  ┌───────────────────────────────────────────────────────────────┐ ║   │
+│  ║  │  PHASE 1: Generate Masks (Commitments)                        │ ║   │
+│  ║  │  ─────────────────────────────────────                        │ ║   │
+│  ║  │  y1 ← random vector in [-γ₁, γ₁]ⁿ     (SLSS mask)            │ ║   │
+│  ║  │  y2 ← random vector in [-γ₂, γ₂]ʳ     (TDD mask)             │ ║   │
+│  ║  │  y3 ← random walk of length k          (EGRW mask)           │ ║   │
+│  ║  │                                                               │ ║   │
+│  ║  │  w1 ← A · y1 mod q                     (SLSS commitment)     │ ║   │
+│  ║  │  w2 ← Hash(y2 || T)                    (TDD commitment)      │ ║   │
+│  ║  │  w3 ← Serialize(vStart)                (EGRW commitment)     │ ║   │
+│  ║  └───────────────────────────────────────────────────────────────┘ ║   │
+│  ║                             │                                       ║   │
+│  ║                             ▼                                       ║   │
+│  ║  ┌───────────────────────────────────────────────────────────────┐ ║   │
+│  ║  │  PHASE 2: Compute Unified Challenge                           │ ║   │
+│  ║  │  ─────────────────────────────────                            │ ║   │
+│  ║  │  c ← SHA3-256(w1 || w2 || w3 || μ)                           │ ║   │
+│  ║  │                                                               │ ║   │
+│  ║  │  Key: All three witnesses bound to SAME challenge            │ ║   │
+│  ║  │       Attacker must solve ALL THREE to forge                 │ ║   │
+│  ║  └───────────────────────────────────────────────────────────────┘ ║   │
+│  ║                             │                                       ║   │
+│  ║                             ▼                                       ║   │
+│  ║  ┌───────────────────────────────────────────────────────────────┐ ║   │
+│  ║  │  PHASE 3: Compute Responses                                   │ ║   │
+│  ║  │  ─────────────────────────                                    │ ║   │
+│  ║  │  z1 ← y1 + c · s1 mod q    (SLSS response)                   │ ║   │
+│  ║  │  z2 ← y2 + c · factors     (TDD response)                    │ ║   │
+│  ║  │  z3 ← Combine(y3, walk, c) (EGRW response)                   │ ║   │
+│  ║  └───────────────────────────────────────────────────────────────┘ ║   │
+│  ║                             │                                       ║   │
+│  ║                             ▼                                       ║   │
+│  ║  ┌───────────────────────────────────────────────────────────────┐ ║   │
+│  ║  │  PHASE 4: Check Rejection Bounds                              │ ║   │
+│  ║  │  ───────────────────────────────                              │ ║   │
+│  ║  │  IF ||z1|| > γ₁ - β  →  REJECT, try again                    │ ║   │
+│  ║  │  IF ||z2|| > γ₂ - β  →  REJECT, try again                    │ ║   │
+│  ║  │                                                               │ ║   │
+│  ║  │  Purpose: Ensures signature distribution is independent       │ ║   │
+│  ║  │           of secret key (prevents key leakage)               │ ║   │
+│  ║  └───────────────────────────────────────────────────────────────┘ ║   │
+│  ║                             │                                       ║   │
+│  ║                  (bounds OK) ▼                                      ║   │
+│  ╚═════════════════════════════════════════════════════════════════════╝   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 2: Assemble Signature                                         │   │
+│  │  ──────────────────────────                                         │   │
+│  │  signature = {                                                      │   │
+│  │      challenge:  c          (32 bytes)                             │   │
+│  │      z1:         {z, w1}    (SLSS response + commitment)           │   │
+│  │      z2:         {z, w2}    (TDD response + commitment)            │   │
+│  │      z3:         {walk, hints}  (EGRW response)                    │   │
+│  │  }                                                                  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│                   ┌─────────────────────┐                                  │
+│                   │     SIGNATURE       │                                  │
+│                   │ ─────────────────── │                                  │
+│                   │ ~6 KB (MOS-128)     │                                  │
+│                   │ ~12 KB (MOS-256)    │                                  │
+│                   └─────────────────────┘                                  │
+│                                                                             │
+│  OUTPUT: signature                                                         │
+│  Signing time: ~25ms (MOS-128), includes rejection sampling               │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.5.5 Signature Verification Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        SIGNATURE VERIFICATION                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  INPUT: message, signature, publicKey                                      │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 1: Check Response Bounds                                      │   │
+│  │  ─────────────────────────────                                      │   │
+│  │  IF ||z1|| > γ₁ - β  →  RETURN false                               │   │
+│  │  IF ||z2|| > γ₂ - β  →  RETURN false                               │   │
+│  │                                                                     │   │
+│  │  Purpose: Valid signatures must have small responses               │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 2: Recompute Message Hash                                     │   │
+│  │  ──────────────────────────────                                     │   │
+│  │  pk_hash ← SHA3-256(slss_pk || tdd_pk || egrw_pk)                  │   │
+│  │  μ ← SHA3-256(pk_hash || message)                                  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 3: Extract Challenge from Signature                          │   │
+│  │  ─────────────────────────────────────                              │   │
+│  │  c ← signature.challenge                                           │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 4: Retrieve Commitments                                       │   │
+│  │  ────────────────────────────                                       │   │
+│  │                                                                     │   │
+│  │  w1 ← signature.z1.commitment  (SLSS commitment from signature)    │   │
+│  │  w2 ← signature.z2.commitment  (TDD commitment from signature)     │   │
+│  │  w3 ← Serialize(egrw_pk.vStart)(EGRW commitment from public key)   │   │
+│  │                                                                     │   │
+│  │  Note: Commitments are stored in signature because they cannot     │   │
+│  │        be recomputed from responses (due to LWE error terms)       │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 5: Recompute and Compare Challenge                           │   │
+│  │  ───────────────────────────────────────                           │   │
+│  │  expected_c ← SHA3-256(w1 || w2 || w3 || μ)                        │   │
+│  │                                                                     │   │
+│  │  IF c == expected_c (constant-time comparison):                    │   │
+│  │      RETURN true   ✓ Signature is valid                            │   │
+│  │  ELSE:                                                              │   │
+│  │      RETURN false  ✗ Signature is invalid                          │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│                   ┌─────────────────────┐                                  │
+│                   │   VERIFICATION      │                                  │
+│                   │      RESULT         │                                  │
+│                   │ ─────────────────── │                                  │
+│                   │ true  = Valid       │                                  │
+│                   │ false = Invalid     │                                  │
+│                   └─────────────────────┘                                  │
+│                                                                             │
+│  OUTPUT: boolean (true if signature is valid)                              │
+│  Verification time: ~3-4ms (MOS-128)                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 3.5.6 Hybrid Encryption Flow (KEM + AES-GCM)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         HYBRID ENCRYPTION                                   │
+│              (KEM-DEM: Key Encapsulation + Symmetric Encryption)           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  INPUT: plaintext (arbitrary length), recipient's publicKey               │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 1: Key Encapsulation                                          │   │
+│  │  ─────────────────────────                                          │   │
+│  │  (ciphertext_kem, sharedSecret) ← Encapsulate(publicKey)           │   │
+│  │                                                                     │   │
+│  │  sharedSecret is 32 bytes of shared entropy                        │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 2: Derive Symmetric Keys                                      │   │
+│  │  ─────────────────────────────                                      │   │
+│  │  enc_key ← SHAKE256("kmosaic-enc-key-v1" || sharedSecret, 32)      │   │
+│  │  nonce   ← SHAKE256("kmosaic-nonce-v1"   || sharedSecret, 12)      │   │
+│  │                                                                     │   │
+│  │  enc_key = 256-bit AES key                                         │   │
+│  │  nonce   = 96-bit unique value for AES-GCM                         │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 3: Symmetric Encryption (AES-256-GCM)                         │   │
+│  │  ──────────────────────────────────────────                         │   │
+│  │  ciphertext_aes ← AES-256-GCM.Encrypt(enc_key, nonce, plaintext)   │   │
+│  │                                                                     │   │
+│  │  Provides: Confidentiality + Integrity (authenticated encryption)  │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  STEP 4: Combine Ciphertexts                                        │   │
+│  │  ───────────────────────────                                        │   │
+│  │  output ← [kem_length (4 bytes)] || ciphertext_kem || ciphertext_aes│  │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                              │                                              │
+│                              ▼                                              │
+│                   ┌─────────────────────┐                                  │
+│                   │  ENCRYPTED OUTPUT   │                                  │
+│                   │ ─────────────────── │                                  │
+│                   │ KEM ciphertext +    │                                  │
+│                   │ AES ciphertext +    │                                  │
+│                   │ Auth tag (16 bytes) │                                  │
+│                   └─────────────────────┘                                  │
+│                                                                             │
+│  ═══════════════════════════════════════════════════════════════════════   │
+│                                                                             │
+│                          DECRYPTION FLOW                                    │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │  1. Parse: Extract ciphertext_kem and ciphertext_aes               │   │
+│  │  2. KEM Decapsulate: sharedSecret ← Decapsulate(ciphertext_kem, sk)│   │
+│  │  3. Derive keys: enc_key, nonce ← SHAKE256(sharedSecret, ...)      │   │
+│  │  4. Decrypt: plaintext ← AES-256-GCM.Decrypt(enc_key, nonce, ct)   │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                                                                             │
+│  OUTPUT: Encrypted message (can be decrypted only by secret key holder)   │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
 ## 4. The Three Hard Problems
 
 kMOSAIC strategically combines three problems from **different mathematical domains**:
