@@ -16,5 +16,5 @@
     "lib": ["ESNext"],
     "types": ["bun-types"]
   },
-  "include": ["src/**/*", "test/**/*", "examples/**/*", "benchmarks/**/*"]
+  "include": ["src/**/*", "test/**/*", "examples/**/*", "benchmarks/**/*", "k-mosaic-cli.ts"]
 }

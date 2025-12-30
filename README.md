@@ -100,6 +100,40 @@ const isValid = await verify(message, signature, publicKey)
 console.log(isValid) // true
 ```
 
+## 💻 Command Line Interface
+
+kMOSAIC includes a command-line interface for terminal-based cryptographic operations:
+
+```bash
+# Install globally
+bun install -g k-mosaic
+
+# Or use via npx
+npx k-mosaic-cli --help
+```
+
+### CLI Examples
+
+```bash
+# KEM: Generate keys, encrypt, and decrypt
+k-mosaic-cli kem keygen -l 128 -o keys.json
+k-mosaic-cli kem encrypt -p keys.json -m "Secret message" -o enc.json
+k-mosaic-cli kem decrypt -s keys.json -p keys.json -c enc.json
+
+# Signatures: Generate keys, sign, and verify
+k-mosaic-cli sign keygen -l 128 -o sign.json
+k-mosaic-cli sign sign -s sign.json -p sign.json -m "Document" -o sig.json
+k-mosaic-cli sign verify -p sign.json -g sig.json
+```
+
+The CLI supports:
+- Key generation for both KEM and signatures
+- File-based encryption/decryption
+- Message signing and verification
+- JSON output for easy integration with other tools
+
+For complete CLI documentation, see [CLI.md](CLI.md).
+
 ## 🔒 Security Levels
 
 | Level   | Post-Quantum Security | Use Case          |
