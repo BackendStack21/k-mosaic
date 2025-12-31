@@ -733,41 +733,35 @@ export function deserializeCiphertext(data: Uint8Array): MOSAICCiphertext {
   // c1
   const c1Len = view.getUint32(offset, true)
   offset += 4
-  const c1Data = data.slice(offset, offset + c1Len)
-  offset += c1Len
-
-  const c1View = new DataView(c1Data.buffer, c1Data.byteOffset)
+  const c1Start = offset
+  const c1View = new DataView(data.buffer, data.byteOffset + c1Start)
   const uLen = c1View.getUint32(0, true)
-  const u = new Int32Array(c1Data.slice(4, 4 + uLen).buffer)
+  const u = new Int32Array(data.buffer, data.byteOffset + c1Start + 4, uLen / 4)
   const vLen = c1View.getUint32(4 + uLen, true)
-  const v = new Int32Array(c1Data.slice(8 + uLen, 8 + uLen + vLen).buffer)
+  const v = new Int32Array(data.buffer, data.byteOffset + c1Start + 8 + uLen, vLen / 4)
+  offset += c1Len
 
   // c2
   const c2Len = view.getUint32(offset, true)
   offset += 4
-  const c2Data = data.slice(offset, offset + c2Len)
+  const c2Start = offset
+  const c2DataLen = new DataView(data.buffer, data.byteOffset + c2Start).getUint32(0, true)
+  const tddData = new Int32Array(data.buffer, data.byteOffset + c2Start + 4, c2DataLen / 4)
   offset += c2Len
-
-  const c2DataLen = new DataView(c2Data.buffer, c2Data.byteOffset).getUint32(
-    0,
-    true,
-  )
-  const tddData = new Int32Array(c2Data.slice(4, 4 + c2DataLen).buffer)
 
   // c3
   const c3Len = view.getUint32(offset, true)
   offset += 4
-  const c3Data = data.slice(offset, offset + c3Len)
-  offset += c3Len
-
-  const vertexView = new DataView(c3Data.buffer, c3Data.byteOffset)
+  const c3Start = offset
+  const vertexView = new DataView(data.buffer, data.byteOffset + c3Start)
   const vertex = {
     a: vertexView.getInt32(0, true),
     b: vertexView.getInt32(4, true),
     c: vertexView.getInt32(8, true),
     d: vertexView.getInt32(12, true),
   }
-  const commitment = c3Data.slice(16)
+  const commitment = data.slice(c3Start + 16, c3Start + c3Len)
+  offset += c3Len
 
   // proof
   const proof = data.slice(offset)

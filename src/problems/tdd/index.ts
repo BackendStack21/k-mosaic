@@ -615,6 +615,6 @@ export function tddSerializePublicKey(pk: TDDPublicKey): Uint8Array {
 export function tddDeserializePublicKey(data: Uint8Array): TDDPublicKey {
   const view = new DataView(data.buffer, data.byteOffset)
   const len = view.getUint32(0, true)
-  const T = new Int32Array(data.slice(4, 4 + len).buffer)
+  const T = new Int32Array(data.buffer, data.byteOffset + 4, len / 4)
   return { T }
 }
