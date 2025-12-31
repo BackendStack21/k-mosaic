@@ -46,6 +46,7 @@ import {
   slssEncrypt,
   slssDecrypt,
   slssSerializePublicKey,
+  slssDeserializePublicKey,
 } from '../problems/slss/index.js'
 
 import {
@@ -53,6 +54,7 @@ import {
   tddEncrypt,
   tddDecrypt,
   tddSerializePublicKey,
+  tddDeserializePublicKey,
 } from '../problems/tdd/index.js'
 
 import {
@@ -60,6 +62,7 @@ import {
   egrwEncrypt,
   egrwDecrypt,
   egrwSerializePublicKey,
+  egrwDeserializePublicKey,
   sl2ToBytes,
 } from '../problems/egrw/index.js'
 
@@ -733,41 +736,46 @@ export function deserializeCiphertext(data: Uint8Array): MOSAICCiphertext {
   // c1
   const c1Len = view.getUint32(offset, true)
   offset += 4
-  const c1Data = data.slice(offset, offset + c1Len)
-  offset += c1Len
-
-  const c1View = new DataView(c1Data.buffer, c1Data.byteOffset)
+  const c1Start = offset
+  const c1View = new DataView(data.buffer, data.byteOffset + c1Start)
   const uLen = c1View.getUint32(0, true)
-  const u = new Int32Array(c1Data.slice(4, 4 + uLen).buffer)
+  const u = new Int32Array(data.buffer, data.byteOffset + c1Start + 4, uLen / 4)
   const vLen = c1View.getUint32(4 + uLen, true)
-  const v = new Int32Array(c1Data.slice(8 + uLen, 8 + uLen + vLen).buffer)
+  const v = new Int32Array(
+    data.buffer,
+    data.byteOffset + c1Start + 8 + uLen,
+    vLen / 4,
+  )
+  offset += c1Len
 
   // c2
   const c2Len = view.getUint32(offset, true)
   offset += 4
-  const c2Data = data.slice(offset, offset + c2Len)
-  offset += c2Len
-
-  const c2DataLen = new DataView(c2Data.buffer, c2Data.byteOffset).getUint32(
-    0,
-    true,
+  const c2Start = offset
+  const c2DataLen = new DataView(
+    data.buffer,
+    data.byteOffset + c2Start,
+  ).getUint32(0, true)
+  const tddData = new Int32Array(
+    data.buffer,
+    data.byteOffset + c2Start + 4,
+    c2DataLen / 4,
   )
-  const tddData = new Int32Array(c2Data.slice(4, 4 + c2DataLen).buffer)
+  offset += c2Len
 
   // c3
   const c3Len = view.getUint32(offset, true)
   offset += 4
-  const c3Data = data.slice(offset, offset + c3Len)
-  offset += c3Len
-
-  const vertexView = new DataView(c3Data.buffer, c3Data.byteOffset)
+  const c3Start = offset
+  const vertexView = new DataView(data.buffer, data.byteOffset + c3Start)
   const vertex = {
     a: vertexView.getInt32(0, true),
     b: vertexView.getInt32(4, true),
     c: vertexView.getInt32(8, true),
     d: vertexView.getInt32(12, true),
   }
-  const commitment = c3Data.slice(16)
+  const commitment = data.slice(c3Start + 16, c3Start + c3Len)
+  offset += c3Len
 
   // proof
   const proof = data.slice(offset)
@@ -780,49 +788,102 @@ export function deserializeCiphertext(data: Uint8Array): MOSAICCiphertext {
   }
 }
 
+/**
+ * Serialize public key to bytes
+ * Format: [level_len:4][level_string][slss_len:4][slss_data][tdd_len:4][tdd_data][egrw_len:4][egrw_data][binding:32]
+ */
 export function serializePublicKey(pk: MOSAICPublicKey): Uint8Array {
   const slssBytes = slssSerializePublicKey(pk.slss)
   const tddBytes = tddSerializePublicKey(pk.tdd)
   const egrwBytes = egrwSerializePublicKey(pk.egrw)
 
-  // Simplified - just concatenate with length prefixes
-  const paramsJson = JSON.stringify(pk.params)
-  const paramsBytes = new TextEncoder().encode(paramsJson)
+  // Serialize security level as string
+  const levelBytes = new TextEncoder().encode(pk.params.level)
 
   const totalLen =
-    16 +
+    4 +
+    levelBytes.length +
+    4 +
     slssBytes.length +
+    4 +
     tddBytes.length +
+    4 +
     egrwBytes.length +
-    pk.binding.length +
-    paramsBytes.length
+    32 // binding is fixed 32 bytes
 
   const result = new Uint8Array(totalLen)
   const view = new DataView(result.buffer)
 
   let offset = 0
 
+  // Security level string
+  view.setUint32(offset, levelBytes.length, true)
+  offset += 4
+  result.set(levelBytes, offset)
+  offset += levelBytes.length
+
+  // SLSS component
   view.setUint32(offset, slssBytes.length, true)
   offset += 4
   result.set(slssBytes, offset)
   offset += slssBytes.length
 
+  // TDD component
   view.setUint32(offset, tddBytes.length, true)
   offset += 4
   result.set(tddBytes, offset)
   offset += tddBytes.length
 
+  // EGRW component
   view.setUint32(offset, egrwBytes.length, true)
   offset += 4
   result.set(egrwBytes, offset)
   offset += egrwBytes.length
 
+  // Binding (fixed 32 bytes, no length prefix)
   result.set(pk.binding, offset)
-  offset += pk.binding.length
-
-  view.setUint32(offset, paramsBytes.length, true)
-  offset += 4
-  result.set(paramsBytes, offset)
 
   return result
+}
+
+/**
+ * Deserialize public key from bytes
+ * Format: [level_len:4][level_string][slss_len:4][slss_data][tdd_len:4][tdd_data][egrw_len:4][egrw_data][binding:32]
+ */
+export function deserializePublicKey(data: Uint8Array): MOSAICPublicKey {
+  const view = new DataView(data.buffer, data.byteOffset)
+  let offset = 0
+
+  // Read security level string
+  const levelLen = view.getUint32(offset, true)
+  offset += 4
+  const levelBytes = data.slice(offset, offset + levelLen)
+  const level = new TextDecoder().decode(levelBytes) as SecurityLevel
+  offset += levelLen
+
+  // Get params from level
+  const params = getParams(level)
+
+  // Read SLSS public key
+  const slssLen = view.getUint32(offset, true)
+  offset += 4
+  const slss = slssDeserializePublicKey(data.slice(offset, offset + slssLen))
+  offset += slssLen
+
+  // Read TDD public key
+  const tddLen = view.getUint32(offset, true)
+  offset += 4
+  const tdd = tddDeserializePublicKey(data.slice(offset, offset + tddLen))
+  offset += tddLen
+
+  // Read EGRW public key
+  const egrwLen = view.getUint32(offset, true)
+  offset += 4
+  const egrw = egrwDeserializePublicKey(data.slice(offset, offset + egrwLen))
+  offset += egrwLen
+
+  // Read binding (fixed 32 bytes)
+  const binding = data.slice(offset, offset + 32)
+
+  return { slss, tdd, egrw, binding, params }
 }

@@ -122,15 +122,12 @@ describe('sign/verify', () => {
 
     const signature = await sign(message, keyPair.secretKey, keyPair.publicKey)
 
+    expect(signature.commitment).toBeInstanceOf(Uint8Array)
+    expect(signature.commitment.length).toBe(32)
     expect(signature.challenge).toBeInstanceOf(Uint8Array)
     expect(signature.challenge.length).toBe(32)
-    expect(signature.z1).toBeDefined()
-    expect(signature.z1.z).toBeInstanceOf(Int32Array)
-    expect(signature.z2).toBeDefined()
-    expect(signature.z2.z).toBeInstanceOf(Int32Array)
-    expect(signature.z3).toBeDefined()
-    expect(signature.z3.combined).toBeInstanceOf(Array)
-    expect(signature.z3.hints).toBeInstanceOf(Uint8Array)
+    expect(signature.response).toBeInstanceOf(Uint8Array)
+    expect(signature.response.length).toBe(64)
   })
 
   test('verification fails for tampered message', async () => {
@@ -170,17 +167,14 @@ describe('sign/verify', () => {
     expect(constantTimeEqual(sig1.challenge, sig2.challenge)).toBe(false)
   })
 
-  test('same message produces same signature (deterministic)', async () => {
+  test('same message produces verifiable signatures', async () => {
     const keyPair = await generateKeyPair('MOS-128')
     const message = new TextEncoder().encode('Same message')
 
     const sig1 = await sign(message, keyPair.secretKey, keyPair.publicKey)
     const sig2 = await sign(message, keyPair.secretKey, keyPair.publicKey)
 
-    // Signatures should be deterministic (using secret key seed for randomness)
-    expect(constantTimeEqual(sig1.challenge, sig2.challenge)).toBe(true)
-
-    // Both should verify
+    // Both signatures should verify (randomized signing)
     expect(await verify(message, sig1, keyPair.publicKey)).toBe(true)
     expect(await verify(message, sig2, keyPair.publicKey)).toBe(true)
   })
@@ -242,13 +236,13 @@ describe('serializeSignature/deserializeSignature', () => {
     const serialized = serializeSignature(signature)
     const deserialized = deserializeSignature(serialized)
 
+    expect(
+      constantTimeEqual(deserialized.commitment, signature.commitment),
+    ).toBe(true)
     expect(constantTimeEqual(deserialized.challenge, signature.challenge)).toBe(
       true,
     )
-    expect(deserialized.z1.z.length).toBe(signature.z1.z.length)
-    expect(deserialized.z2.z.length).toBe(signature.z2.z.length)
-    expect(deserialized.z3.combined.length).toBe(signature.z3.combined.length)
-    expect(constantTimeEqual(deserialized.z3.hints, signature.z3.hints)).toBe(
+    expect(constantTimeEqual(deserialized.response, signature.response)).toBe(
       true,
     )
   })
@@ -319,11 +313,11 @@ describe('Signature Security', () => {
     const signature = await sign(message, keyPair.secretKey, keyPair.publicKey)
 
     // Modify the commitment (which is used for challenge computation)
-    const modifiedCommitment = new Uint8Array(signature.z1.commitment!)
+    const modifiedCommitment = new Uint8Array(signature.commitment)
     modifiedCommitment[0] = modifiedCommitment[0] ^ 0xff
     const modifiedSig = {
       ...signature,
-      z1: { z: signature.z1.z, commitment: modifiedCommitment },
+      commitment: modifiedCommitment,
     }
 
     const valid = await verify(message, modifiedSig, keyPair.publicKey)

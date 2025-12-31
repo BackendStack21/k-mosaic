@@ -170,11 +170,14 @@ export interface EGRWResponse {
   hints: Uint8Array
 }
 
+/**
+ * kMOSAIC Signature structure
+ * Compatible with Go implementation's simple Fiat-Shamir scheme
+ */
 export interface MOSAICSignature {
-  challenge: Uint8Array
-  z1: SLSSResponse
-  z2: TDDResponse
-  z3: EGRWResponse
+  commitment: Uint8Array // 32 bytes: H(witness || msgHash || binding)
+  challenge: Uint8Array // 32 bytes: H(commitment || msgHash || pkHash)
+  response: Uint8Array // 64 bytes: SHAKE256 response
 }
 
 // =============================================================================

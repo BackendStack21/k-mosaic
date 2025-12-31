@@ -268,10 +268,8 @@ export function generateNIZKProof(
 
   for (let i = 0; i < 3; i++) {
     // Derive commitment randomness deterministically for consistency
-    const r = shake256(
-      hashWithDomain(`${DOMAIN_NIZK}-commit-${i}`, randomness),
-      32,
-    )
+    // Use sha3_256 for commitment randomness
+    const r = sha3_256(hashWithDomain(`${DOMAIN_NIZK}-commit-${i}`, randomness))
     commitRandomness.push(r)
 
     // Commit to share with binding to ciphertext
@@ -296,10 +294,11 @@ export function generateNIZKProof(
   const responses: Uint8Array[] = []
   for (let i = 0; i < 3; i++) {
     // Generate mask from challenge (ensures ZK property)
-    const mask = shake256(
+    // CRITICAL: Use sha3_256 directly and truncate, NOT shake256 with variable length
+    const fullMask = sha3_256(
       hashWithDomain(`${DOMAIN_NIZK}-mask-${i}`, challenge),
-      shares[i].length,
     )
+    const mask = fullMask.slice(0, shares[i].length)
 
     // Response = masked_share || commit_randomness
     const response = new Uint8Array(shares[i].length + 32)
@@ -329,7 +328,7 @@ export function generateNIZKProof(
 export function verifyNIZKProof(
   proof: NIZKProof,
   ciphertextHashes: Uint8Array[],
-  messageHash: Uint8Array,
+  message: Uint8Array,
 ): boolean {
   const { challenge, responses, commitments } = proof
 
@@ -346,7 +345,7 @@ export function verifyNIZKProof(
 
   // Recompute challenge with same binding
   const challengeInput = hashConcat(
-    hashWithDomain(`${DOMAIN_NIZK}-msg`, messageHash),
+    hashWithDomain(`${DOMAIN_NIZK}-msg`, message),
     ...commitments,
     ...ciphertextHashes,
   )
@@ -368,10 +367,11 @@ export function verifyNIZKProof(
     const commitRandomness = response.slice(shareLen)
 
     // Reconstruct share from masked response
-    const mask = shake256(
+    // CRITICAL: Use sha3_256 directly and truncate, NOT shake256 with variable length
+    const fullMask = sha3_256(
       hashWithDomain(`${DOMAIN_NIZK}-mask-${i}`, challenge),
-      shareLen,
     )
+    const mask = fullMask.slice(0, shareLen)
     const share = new Uint8Array(shareLen)
     for (let j = 0; j < shareLen; j++) {
       share[j] = response[j] ^ mask[j]

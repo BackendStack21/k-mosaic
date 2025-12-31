@@ -12,6 +12,9 @@
       "import": "./lib/index.js"
     }
   },
+  "bin": {
+    "k-mosaic-cli": "./lib/k-mosaic-cli.js"
+  },
   "files": [
     "lib",
     "README.md",
@@ -46,11 +49,12 @@
   },
   "author": "Rolando Santamaria Maso <kyberneees@gmail.com>",
   "license": "MIT",
-  "peerDependencies": {
-    "typescript": "^5.8.3"
+  "dependencies": {
+    "commander": "^14.0.2"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "typescript": "^5.8.3"
   }
 }

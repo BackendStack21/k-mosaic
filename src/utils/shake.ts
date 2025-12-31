@@ -18,9 +18,6 @@ import { zeroize } from './constant-time.js'
 // Domain separator for fallback SHAKE256 implementation
 const DOMAIN_SHAKE_FALLBACK = new TextEncoder().encode('kMOSAIC-shake256-v1')
 
-// Domain separator for concatenated hashing
-const DOMAIN_HASH_CONCAT = new TextEncoder().encode('kMOSAIC-concat-v1')
-
 // Check if native SHAKE256 is available
 let hasNativeShake256: boolean | null = null
 let shake256FallbackWarned = false // Track if warning has been shown
@@ -180,32 +177,23 @@ export function sha3_256(input: Uint8Array): Uint8Array {
  * Uses length prefixes to prevent collision attacks from concatenation
  * e.g., H("AB", "C") != H("A", "BC")
  *
+ * Format: [len1:4][data1][len2:4][data2]...
+ *
  * @param inputs - Variable number of Uint8Array inputs
  * @returns Hash of concatenated inputs
  */
 export function hashConcat(...inputs: Uint8Array[]): Uint8Array {
-  // Calculate total size: domain + count(4) + sum of (length(4) + data)
-  const totalLength =
-    DOMAIN_HASH_CONCAT.length +
-    4 +
-    inputs.reduce((sum, arr) => sum + 4 + arr.length, 0)
+  // Calculate total size: sum of (length(4) + data)
+  const totalLength = inputs.reduce((sum, arr) => sum + 4 + arr.length, 0)
 
   // Allocate combined buffer
   const combined = new Uint8Array(totalLength)
   const view = new DataView(combined.buffer)
   let offset = 0
 
-  // Domain prefix
-  combined.set(DOMAIN_HASH_CONCAT, offset)
-  offset += DOMAIN_HASH_CONCAT.length
-
-  // Number of inputs
-  view.setUint32(offset, inputs.length, true)
-  offset += 4
-
   // Each input with length prefix
   for (const input of inputs) {
-    // Write length of current input
+    // Write length of current input as little-endian 4-byte uint
     view.setUint32(offset, input.length, true)
     offset += 4
 
@@ -225,9 +213,9 @@ export function hashConcat(...inputs: Uint8Array[]): Uint8Array {
 
 /**
  * Domain-separated hash with length-prefixed encoding
- * Prevents domain/input boundary ambiguity
+ * Format: [1-byte domain length][domain bytes][input bytes]
  *
- * @param domain - Domain string
+ * @param domain - Domain string (max 255 bytes)
  * @param input - Input data
  * @returns Hash output
  */
@@ -235,23 +223,23 @@ export function hashWithDomain(domain: string, input: Uint8Array): Uint8Array {
   // Encode domain string to bytes
   const domainBytes = new TextEncoder().encode(domain)
 
-  // Length-prefixed encoding: domainLen(4) + domain + inputLen(4) + input
-  const combined = new Uint8Array(4 + domainBytes.length + 4 + input.length)
-  const view = new DataView(combined.buffer)
+  // Validate domain length (max 255 bytes)
+  if (domainBytes.length > 255) {
+    throw new Error('domain string must be at most 255 bytes')
+  }
+
+  // Length-prefixed encoding: domainLen(1-byte) + domain + input
+  const combined = new Uint8Array(1 + domainBytes.length + input.length)
 
   let offset = 0
 
-  // Write domain length
-  view.setUint32(offset, domainBytes.length, true)
-  offset += 4
+  // Write domain length as single byte
+  combined[offset] = domainBytes.length
+  offset += 1
 
   // Write domain bytes
   combined.set(domainBytes, offset)
   offset += domainBytes.length
-
-  // Write input length
-  view.setUint32(offset, input.length, true)
-  offset += 4
 
   // Write input bytes
   combined.set(input, offset)
