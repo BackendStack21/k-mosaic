@@ -211,7 +211,7 @@ interface MOSAICPublicKey {
   slss: SLSSPublicKey
   tdd: TDDPublicKey
   egrw: EGRWPublicKey
-  binding: Uint8Array    // 32-byte cryptographic binding hash
+  binding: Uint8Array // 32-byte cryptographic binding hash
   params: MOSAICParams
 }
 
@@ -219,7 +219,7 @@ interface MOSAICSecretKey {
   slss: SLSSSecretKey
   tdd: TDDSecretKey
   egrw: EGRWSecretKey
-  seed: Uint8Array       // Original seed for implicit rejection
+  seed: Uint8Array // Original seed for implicit rejection
   publicKeyHash: Uint8Array
 }
 
@@ -236,9 +236,9 @@ interface MOSAICCiphertext {
 }
 
 interface MOSAICSignature {
-  commitment: Uint8Array  // 32 bytes
-  challenge: Uint8Array   // 32 bytes
-  response: Uint8Array    // 64 bytes
+  commitment: Uint8Array // 32 bytes
+  challenge: Uint8Array // 32 bytes
+  response: Uint8Array // 64 bytes
 }
 
 interface EncapsulationResult {
@@ -574,18 +574,24 @@ evictOldestCacheEntries(): void
 import crypto from 'k-mosaic'
 
 const keyPair = await crypto.kem.generateKeyPair()
-const { ciphertext, sharedSecret } = await crypto.kem.encapsulate(keyPair.publicKey)
+const { ciphertext, sharedSecret } = await crypto.kem.encapsulate(
+  keyPair.publicKey,
+)
 
-const signature = await crypto.sign.sign(message, keyPair.secretKey, keyPair.publicKey)
+const signature = await crypto.sign.sign(
+  message,
+  keyPair.secretKey,
+  keyPair.publicKey,
+)
 const isValid = await crypto.sign.verify(message, signature, keyPair.publicKey)
 ```
 
 ### Version Information
 
 ```typescript
-const ALGORITHM_NAME = 'kMOSAIC'     // Algorithm name
-const ALGORITHM_VERSION = '1.0'      // Algorithm version
-const CLI_VERSION = '1.0.0'          // CLI version
+const ALGORITHM_NAME = 'kMOSAIC' // Algorithm name
+const ALGORITHM_VERSION = '1.0' // Algorithm version
+const CLI_VERSION = '1.0.0' // CLI version
 
 interface AlgorithmInfo {
   name: string
