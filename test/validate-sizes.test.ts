@@ -68,7 +68,7 @@ describe('Size Validation Tests', () => {
       signatureMOS128 = await sign(
         message,
         signatureKeyMOS128.secretKey,
-        signatureKeyMOS128.publicKey
+        signatureKeyMOS128.publicKey,
       )
     })
 
@@ -147,7 +147,7 @@ describe('Size Validation Tests', () => {
       signatureMOS256 = await sign(
         message,
         signatureKeyMOS256.secretKey,
-        signatureKeyMOS256.publicKey
+        signatureKeyMOS256.publicKey,
       )
     })
 
@@ -309,7 +309,7 @@ describe('Size Validation Tests', () => {
       const signature = await sign(
         message,
         keyPair.secretKey,
-        keyPair.publicKey
+        keyPair.publicKey,
       )
       const serialized = serializeSignature(signature)
 
@@ -375,21 +375,25 @@ describe('Size Validation Tests', () => {
     test('Generate comprehensive size report', async () => {
       const keyPairMOS128 = await generateKEMKeyPair(SecurityLevel.MOS_128)
       const encResultMOS128 = await encapsulate(keyPairMOS128.publicKey)
-      const keyPairSigMOS128 = await generateSignatureKeyPair(SecurityLevel.MOS_128)
+      const keyPairSigMOS128 = await generateSignatureKeyPair(
+        SecurityLevel.MOS_128,
+      )
       const messageMOS128 = Buffer.from('Test message for signature validation')
       const signatureMOS128 = await sign(
         messageMOS128,
         keyPairSigMOS128.secretKey,
-        keyPairSigMOS128.publicKey
+        keyPairSigMOS128.publicKey,
       )
 
       const keyPairMOS256 = await generateKEMKeyPair(SecurityLevel.MOS_256)
       const encResultMOS256 = await encapsulate(keyPairMOS256.publicKey)
-      const keyPairSigMOS256 = await generateSignatureKeyPair(SecurityLevel.MOS_256)
+      const keyPairSigMOS256 = await generateSignatureKeyPair(
+        SecurityLevel.MOS_256,
+      )
       const signatureMOS256 = await sign(
         messageMOS128,
         keyPairSigMOS256.secretKey,
-        keyPairSigMOS256.publicKey
+        keyPairSigMOS256.publicKey,
       )
 
       const report = `

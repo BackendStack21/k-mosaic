@@ -741,15 +741,26 @@ export function deserializeCiphertext(data: Uint8Array): MOSAICCiphertext {
   const uLen = c1View.getUint32(0, true)
   const u = new Int32Array(data.buffer, data.byteOffset + c1Start + 4, uLen / 4)
   const vLen = c1View.getUint32(4 + uLen, true)
-  const v = new Int32Array(data.buffer, data.byteOffset + c1Start + 8 + uLen, vLen / 4)
+  const v = new Int32Array(
+    data.buffer,
+    data.byteOffset + c1Start + 8 + uLen,
+    vLen / 4,
+  )
   offset += c1Len
 
   // c2
   const c2Len = view.getUint32(offset, true)
   offset += 4
   const c2Start = offset
-  const c2DataLen = new DataView(data.buffer, data.byteOffset + c2Start).getUint32(0, true)
-  const tddData = new Int32Array(data.buffer, data.byteOffset + c2Start + 4, c2DataLen / 4)
+  const c2DataLen = new DataView(
+    data.buffer,
+    data.byteOffset + c2Start,
+  ).getUint32(0, true)
+  const tddData = new Int32Array(
+    data.buffer,
+    data.byteOffset + c2Start + 4,
+    c2DataLen / 4,
+  )
   offset += c2Len
 
   // c3
@@ -790,10 +801,14 @@ export function serializePublicKey(pk: MOSAICPublicKey): Uint8Array {
   const levelBytes = new TextEncoder().encode(pk.params.level)
 
   const totalLen =
-    4 + levelBytes.length +
-    4 + slssBytes.length +
-    4 + tddBytes.length +
-    4 + egrwBytes.length +
+    4 +
+    levelBytes.length +
+    4 +
+    slssBytes.length +
+    4 +
+    tddBytes.length +
+    4 +
+    egrwBytes.length +
     32 // binding is fixed 32 bytes
 
   const result = new Uint8Array(totalLen)

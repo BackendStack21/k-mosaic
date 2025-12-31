@@ -3823,10 +3823,10 @@ Key generation is done once and keys are reused.
 
 ### Signature Operations
 
-| Operation | Time (ms) | Ops/sec |
-| :-------- | :-------- | :------ |
+| Operation | Time (ms) | Ops/sec  |
+| :-------- | :-------- | :------- |
 | Sign      | 0.040     | 25,049.6 |
-| Verify    | 1.417     | 705.9   |
+| Verify    | 1.417     | 705.9    |
 
 _Benchmarks on Apple M2 Pro, Bun runtime. Tested: December 31, 2025._
 
@@ -3834,29 +3834,30 @@ _Benchmarks on Apple M2 Pro, Bun runtime. Tested: December 31, 2025._
 
 #### MOS-128 (128-bit Security)
 
-| Component         | Size    | Notes |
-| :---------------- | :------ | :---- |
-| KEM Public Key    | ~824 KB | Contains SLSS matrix A (384 × 512 × 4 bytes), TDD tensor, EGRW keys |
-| KEM Ciphertext    | ~5.7 KB | Contains SLSS vectors (c1), TDD ciphertext (c2), EGRW vertex path (c3), NIZK proof |
-| Signature         | 140 B   | commitment (32B) + challenge (32B) + response (64B) + overhead (12B) |
+| Component      | Size    | Notes                                                                              |
+| :------------- | :------ | :--------------------------------------------------------------------------------- |
+| KEM Public Key | ~824 KB | Contains SLSS matrix A (384 × 512 × 4 bytes), TDD tensor, EGRW keys                |
+| KEM Ciphertext | ~5.7 KB | Contains SLSS vectors (c1), TDD ciphertext (c2), EGRW vertex path (c3), NIZK proof |
+| Signature      | 140 B   | commitment (32B) + challenge (32B) + response (64B) + overhead (12B)               |
 
 #### MOS-256 (256-bit Security)
 
-| Component         | Size    | Notes |
-| :---------------- | :------ | :---- |
-| KEM Public Key    | ~3.3 MB | Contains SLSS matrix A (768 × 1024 × 4 bytes), larger TDD tensor, EGRW keys |
-| KEM Ciphertext    | ~10.5 KB| Larger ciphertexts due to bigger parameter sets |
-| Signature         | 140 B   | Same as MOS-128 - signature size is independent of security level |
+| Component      | Size     | Notes                                                                       |
+| :------------- | :------- | :-------------------------------------------------------------------------- |
+| KEM Public Key | ~3.3 MB  | Contains SLSS matrix A (768 × 1024 × 4 bytes), larger TDD tensor, EGRW keys |
+| KEM Ciphertext | ~10.5 KB | Larger ciphertexts due to bigger parameter sets                             |
+| Signature      | 140 B    | Same as MOS-128 - signature size is independent of security level           |
 
 #### Classical Cryptography (for Reference)
 
-| Component         | Size    | Status |
-| :---------------- | :------ | :----- |
-| X25519 Public Key | 32 B    | ✓ |
-| X25519 Ciphertext | 32 B    | (44-76B with serialization metadata) |
-| Ed25519 Signature | 64 B    | ✓ |
+| Component         | Size | Status                               |
+| :---------------- | :--- | :----------------------------------- |
+| X25519 Public Key | 32 B | ✓                                    |
+| X25519 Ciphertext | 32 B | (44-76B with serialization metadata) |
+| Ed25519 Signature | 64 B | ✓                                    |
 
 **Important Notes:**
+
 - kMOSAIC provides post-quantum security at the cost of **much larger** keys compared to classical algorithms (~100x larger)
 - Signatures are compact (140 bytes) despite the heterogeneous design
 - Public key size dominates the communication footprint due to lattice-based matrix storage

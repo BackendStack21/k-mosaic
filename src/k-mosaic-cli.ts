@@ -313,26 +313,23 @@ kem
   .description('Encapsulate (generate shared secret and ciphertext)')
   .requiredOption('-p, --public-key <path>', 'Path to public key file')
   .option('-o, --output <path>', 'Output file path')
-  .action(
-    async (options: {
-      publicKey: string
-      output?: string
-    }) => {
-      const pkFileData = await fs.readFile(options.publicKey, 'utf-8')
-      const pkFile = JSON.parse(pkFileData)
-      const publicKeyBytes = Buffer.from(pkFile.public_key, 'base64')
-      const publicKey = customDeserializePublicKey(publicKeyBytes)
+  .action(async (options: { publicKey: string; output?: string }) => {
+    const pkFileData = await fs.readFile(options.publicKey, 'utf-8')
+    const pkFile = JSON.parse(pkFileData)
+    const publicKeyBytes = Buffer.from(pkFile.public_key, 'base64')
+    const publicKey = customDeserializePublicKey(publicKeyBytes)
 
-      const result = await encapsulate(publicKey)
+    const result = await encapsulate(publicKey)
 
-      const output = {
-        ciphertext: Buffer.from(serializeCiphertext(result.ciphertext)).toString('base64'),
-        shared_secret: Buffer.from(result.sharedSecret).toString('base64'),
-      }
+    const output = {
+      ciphertext: Buffer.from(serializeCiphertext(result.ciphertext)).toString(
+        'base64',
+      ),
+      shared_secret: Buffer.from(result.sharedSecret).toString('base64'),
+    }
 
-      await writeOutput(JSON.stringify(output, null, 2), options.output)
-    },
-  )
+    await writeOutput(JSON.stringify(output, null, 2), options.output)
+  })
 
 kem
   .command('decapsulate')

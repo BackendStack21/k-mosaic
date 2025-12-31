@@ -269,9 +269,7 @@ export function generateNIZKProof(
   for (let i = 0; i < 3; i++) {
     // Derive commitment randomness deterministically for consistency
     // Use sha3_256 for commitment randomness
-    const r = sha3_256(
-      hashWithDomain(`${DOMAIN_NIZK}-commit-${i}`, randomness),
-    )
+    const r = sha3_256(hashWithDomain(`${DOMAIN_NIZK}-commit-${i}`, randomness))
     commitRandomness.push(r)
 
     // Commit to share with binding to ciphertext

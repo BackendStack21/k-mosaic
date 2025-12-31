@@ -127,6 +127,7 @@ k-mosaic-cli sign verify -p sign.json -g sig.json
 ```
 
 The CLI supports:
+
 - Key generation for both KEM and signatures
 - File-based encryption/decryption
 - Message signing and verification

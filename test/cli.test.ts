@@ -129,7 +129,14 @@ describe('CLI kem keygen', () => {
 
   test('generates keypair with level 256', async () => {
     const outputPath = path.join(tempDir, 'kem-keypair-256.json')
-    const result = await runCli(['kem', 'keygen', '-l', '256', '-o', outputPath])
+    const result = await runCli([
+      'kem',
+      'keygen',
+      '-l',
+      '256',
+      '-o',
+      outputPath,
+    ])
 
     expect(result.exitCode).toBe(0)
 
@@ -377,7 +384,14 @@ describe('CLI kem encapsulate/decapsulate', () => {
     const encapPath = path.join(tempDir, 'encap-roundtrip.json')
 
     // Encapsulate
-    await runCli(['kem', 'encapsulate', '--public-key', keyFilePath, '-o', encapPath])
+    await runCli([
+      'kem',
+      'encapsulate',
+      '--public-key',
+      keyFilePath,
+      '-o',
+      encapPath,
+    ])
 
     const encap = JSON.parse(await fs.readFile(encapPath, 'utf-8'))
     const originalSecret = encap.shared_secret
@@ -786,7 +800,14 @@ describe('CLI output format compatibility', () => {
     const encapPath = path.join(tempDir, 'format-encapsulation.json')
 
     await runCli(['kem', 'keygen', '-o', keyPath])
-    await runCli(['kem', 'encapsulate', '--public-key', keyPath, '-o', encapPath])
+    await runCli([
+      'kem',
+      'encapsulate',
+      '--public-key',
+      keyPath,
+      '-o',
+      encapPath,
+    ])
 
     const encap = JSON.parse(await fs.readFile(encapPath, 'utf-8'))
 

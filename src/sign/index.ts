@@ -51,7 +51,6 @@ import { computeBinding } from '../entanglement/index.js'
 const DOMAIN_CHALLENGE = 'kmosaic-sign-chal-v1'
 const DOMAIN_RESPONSE = 'kmosaic-sign-resp-v1'
 
-
 // =============================================================================
 // Signature Key Generation
 // =============================================================================
@@ -385,10 +384,14 @@ export function serializePublicKey(pk: MOSAICPublicKey): Uint8Array {
   const levelBytes = new TextEncoder().encode(pk.params.level)
 
   const totalLen =
-    4 + levelBytes.length +
-    4 + slssBytes.length +
-    4 + tddBytes.length +
-    4 + egrwBytes.length +
+    4 +
+    levelBytes.length +
+    4 +
+    slssBytes.length +
+    4 +
+    tddBytes.length +
+    4 +
+    egrwBytes.length +
     32 // binding is fixed 32 bytes
 
   const result = new Uint8Array(totalLen)
