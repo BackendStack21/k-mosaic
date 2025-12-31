@@ -13,7 +13,7 @@
     }
   },
   "bin": {
-    "k-mosaic-cli": "./k-mosaic-cli.ts"
+    "k-mosaic-cli": "./lib/k-mosaic-cli.js"
   },
   "files": [
     "lib",

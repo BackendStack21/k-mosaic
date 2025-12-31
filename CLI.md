@@ -30,7 +30,7 @@ k-mosaic-cli sign verify -p sign.json -g sig.json
 | Generate KEM keys     | `k-mosaic-cli kem keygen -l 128 -o keys.json`                               |
 | Encrypt message       | `k-mosaic-cli kem encrypt -p keys.json -m "text" -o enc.json`               |
 | Encrypt file          | `k-mosaic-cli kem encrypt -p keys.json -i file.txt -o enc.json`             |
-| Decrypt message       | `k-mosaic-cli kem decrypt -s keys.json -p keys.json -c enc.json`            |
+| Decrypt message       | `k-mosaic-cli kem decrypt -s keys.json -p keys.json -c enc.json -o out.txt` |
 | Generate signing keys | `k-mosaic-cli sign keygen -l 128 -o sign.json`                              |
 | Sign message          | `k-mosaic-cli sign sign -s sign.json -p sign.json -m "text" -o sig.json`    |
 | Sign file             | `k-mosaic-cli sign sign -s sign.json -p sign.json -i file.txt -o sig.json`  |
@@ -117,18 +117,18 @@ bun install
 3. **Run the CLI directly:**
 
 ```bash
-bun k-mosaic-cli.ts version
+bun src/k-mosaic-cli.ts version
 
 # Or make it executable
 chmod +x k-mosaic-cli.ts
-./k-mosaic-cli.ts version
+./src/k-mosaic-cli.ts version
 ```
 
 4. **Create a symlink (optional):**
 
 ```bash
 # Create symlink to run from anywhere
-ln -s $(pwd)/k-mosaic-cli.ts /usr/local/bin/k-mosaic-cli
+ln -s $(pwd)/src/k-mosaic-cli.ts /usr/local/bin/k-mosaic-cli
 ```
 
 ### Uninstall
@@ -219,11 +219,10 @@ When you generate keys with `keygen`, you get a JSON file containing:
 
 ### Global Options
 
-| Option      | Short | Description                                        |
-| ----------- | ----- | -------------------------------------------------- |
-| `--level`   | `-l`  | Security level: 128 or 256 (default: 128)          |
-| `--output`  | `-o`  | Output file path (default: stdout)                 |
-| `--verbose` | `-v`  | Verbose output                                     |
+| Option     | Short | Description                        |
+| ---------- | ----- | ---------------------------------- |
+| `--level`  | `-l`  | Security level: 128 or 256 (default: 128) |
+| `--output` | `-o`  | Output file path (default: stdout) |
 
 ### KEM Operations
 
@@ -266,44 +265,6 @@ k-mosaic-cli kem keygen --level 128 --output my-kem-keypair.json
 - Keep the keypair file secure with `chmod 600 my-kem-keypair.json`
 - To share your public key, see "Working with Keys" section below
 - Back up your keypair file in a secure location
-
-#### Encapsulate
-
-```bash
-k-mosaic-cli kem encapsulate --public-key <file> [OPTIONS]
-```
-
-Creates a shared secret and ciphertext using the recipient's public key.
-
-**Options:**
-
-- `--public-key`, `-p`: Path to public key file (required)
-
-**Example:**
-
-```bash
-k-mosaic-cli kem encapsulate --public-key keypair.json --output encapsulation.json
-```
-
-#### Decapsulate
-
-```bash
-k-mosaic-cli kem decapsulate --secret-key <file> --public-key <file> --ciphertext <file> [OPTIONS]
-```
-
-Recovers the shared secret from a ciphertext.
-
-**Options:**
-
-- `--secret-key`, `-s`: Path to secret key file (required)
-- `--public-key`, `-p`: Path to public key file (required)
-- `--ciphertext`, `-c`: Path to ciphertext file (required)
-
-**Example:**
-
-```bash
-k-mosaic-cli kem decapsulate --secret-key keypair.json --public-key keypair.json --ciphertext encapsulation.json
-```
 
 #### Encrypt
 
@@ -594,22 +555,71 @@ k-mosaic-cli benchmark --level 128 --iterations 20
 **Sample Output:**
 
 ```
-kMOSAIC Benchmark Results
-=========================
-Security Level: MOS-128
-Iterations: 10
+╔══════════════════════════════════════════════════════════════════════════╗
+║              kMOSAIC vs Node.js Crypto Benchmark                          ║
+║  Post-Quantum (kMOSAIC) vs Classical (X25519/Ed25519)                     ║
+╚══════════════════════════════════════════════════════════════════════════╝
 
-Key Encapsulation Mechanism (KEM)
----------------------------------
-  KeyGen:      6.04ms (avg)
-  Encapsulate: 0.30ms (avg)
-  Decapsulate: 0.34ms (avg)
+📊 KEM Key Generation
+────────────────────────────────────────────────────────
+  kMOSAIC:      19.289 ms/op |     51.8 ops/sec
+  X25519:       0.016 ms/op |  63441.7 ops/sec
+  Comparison: Node.js is 1223.7x faster
 
-Digital Signatures
-------------------
-  KeyGen:      6.11ms (avg)
-  Sign:        0.01ms (avg)
-  Verify:      2.36ms (avg)
+📊 KEM Encapsulation
+────────────────────────────────────────────────────────
+  kMOSAIC:       0.538 ms/op |   1860.0 ops/sec
+  X25519:       0.043 ms/op |  23529.4 ops/sec
+  Comparison: Node.js is 12.7x faster
+
+📊 KEM Decapsulation
+────────────────────────────────────────────────────────
+  kMOSAIC:       4.220 ms/op |    237.0 ops/sec
+  X25519:       0.030 ms/op |  32811.1 ops/sec
+  Comparison: Node.js is 138.5x faster
+
+📊 Signature Key Generation
+────────────────────────────────────────────────────────
+  kMOSAIC:       19.204 ms/op |     52.1 ops/sec
+  Ed25519:       0.012 ms/op |  80971.7 ops/sec
+  Comparison: Node.js is 1555.0x faster
+
+📊 Signing
+────────────────────────────────────────────────────────
+  kMOSAIC:        0.040 ms/op |  25049.6 ops/sec
+  Ed25519:       0.011 ms/op |  87190.3 ops/sec
+  Comparison: Node.js is 3.5x faster
+
+📊 Verification
+────────────────────────────────────────────────────────
+  kMOSAIC:        1.417 ms/op |    705.9 ops/sec
+  Ed25519:       0.033 ms/op |  30607.6 ops/sec
+  Comparison: Node.js is 43.4x faster
+
+════════════════════════════════════════════════════════════════════════════
+
+📦 KEY & SIGNATURE SIZES
+
+┌─────────────────────┬─────────────┬─────────────┐
+│ Component           │ kMOSAIC      │ Classical   │
+├─────────────────────┼─────────────┼─────────────┤
+│ KEM Public Key      │ ~  7500 B │       44 B │
+│ KEM Ciphertext      │ ~  7800 B │       76 B │
+│ Signature           │ ~  7400 B │       64 B │
+└─────────────────────┴─────────────┴─────────────┘
+
+💡 NOTES:
+  • kMOSAIC provides post-quantum security (resistant to quantum attacks)
+  • X25519/Ed25519 are classical algorithms (vulnerable to quantum computers)
+  • kMOSAIC combines 3 independent hard problems for defense-in-depth
+  • Size/speed tradeoff is typical for post-quantum cryptography
+
+🛡️  SECURITY MITIGATIONS (kMOSAIC):
+  • Native timingSafeEqual for constant-time comparisons
+  • Native SHAKE256/SHA3-256 via Node.js crypto
+  • Timing attack padding (25-50ms minimum for signatures)
+  • Entropy validation for seed generation
+  • Implicit rejection in KEM decapsulation
 ```
 
 ## Usage Examples
@@ -793,30 +803,6 @@ else
 fi
 ```
 
-### Key Exchange (KEM Encapsulation)
-
-```bash
-#!/usr/bin/env bash
-
-# Alice generates her key pair
-k-mosaic-cli kem keygen --level 128 --output alice-keys.json
-
-# Bob generates a shared secret for Alice
-k-mosaic-cli kem encapsulate \
-  --public-key alice-keys.json \
-  --output bob-encapsulation.json
-
-# Bob's shared secret is in bob-encapsulation.json under "shared_secret"
-# Bob sends the ciphertext to Alice
-
-# Alice recovers the same shared secret
-k-mosaic-cli kem decapsulate \
-  --secret-key alice-keys.json \
-  --public-key alice-keys.json \
-  --ciphertext bob-encapsulation.json
-
-# Both parties now have the same shared secret for symmetric encryption
-```
 
 ## File Formats
 
@@ -845,15 +831,6 @@ k-mosaic-cli kem decapsulate \
 {
   "message": "base64-encoded-message...",
   "signature": "base64-encoded-signature..."
-}
-```
-
-### Encapsulation Result (JSON)
-
-```json
-{
-  "ciphertext": "base64-encoded-ciphertext...",
-  "shared_secret": "base64-encoded-shared-secret..."
 }
 ```
 
@@ -1045,8 +1022,8 @@ For maximum security in production environments, consider using the Go implement
 
 2. **"Permission denied" when running the CLI**
 
-   - Make the script executable: `chmod +x k-mosaic-cli.ts`
-   - Or run with: `bun k-mosaic-cli.ts`
+   - Make the script executable: `chmod +x src/k-mosaic-cli.ts`
+   - Or run with: `bun src/k-mosaic-cli.ts`
 
 3. **"invalid key format"**
 
@@ -1140,15 +1117,6 @@ chmod 600 secret.json
 - **Sign**: Uses secret key + public key together
 - Tip: You can pass the same keypair file to both parameters: `--secret-key keypair.json --public-key keypair.json`
 
-#### Q: What's the difference between `encapsulate` and `encrypt`?
-
-**A:**
-
-- **Encrypt**: Full message encryption (what you usually want)
-- **Encapsulate**: Key exchange mechanism (generates shared secret)
-- For most users, use `encrypt` for messages and files
-- `encapsulate` is for advanced key-exchange scenarios
-
 #### Q: Can quantum computers break kMOSAIC?
 
 **A:** kMOSAIC is designed to be quantum-resistant. It uses three independent hard problems:
@@ -1192,9 +1160,9 @@ npm install k-mosaic
 # (see the main README.md for API examples)
 ```
 
-#### Q: Why is the signature flag `-g` instead of `-sig`?
+#### Q: Why is the signature flag `-g` instead of `-s`?
 
-**A:** The TypeScript CLI uses `-g` (for siGnature) to avoid conflicts with Commander.js conventions. Both `--signature` (long form) and `-g` (short form) work.
+**A:** The `-s` flag is reserved for `--secret-key`, so the signature verification command uses `-g` (for siGnature). Both `--signature` (long form) and `-g` (short form) work.
 
 ### Getting Help
 

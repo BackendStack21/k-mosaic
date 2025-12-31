@@ -27,7 +27,7 @@ TESTS_TOTAL=0
 # Paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GO_CLI="${SCRIPT_DIR}/k-mosaic-go/cmd/k-mosaic-cli/k-mosaic-cli"
-NODE_CLI="bun ${SCRIPT_DIR}/k-mosaic-node/k-mosaic-cli.ts"
+NODE_CLI="bun ${SCRIPT_DIR}/k-mosaic-node/src/k-mosaic-cli.ts"
 TEST_DIR="${SCRIPT_DIR}/test-compatibility"
 
 # Functions
@@ -122,7 +122,7 @@ main() {
     fi
 
     # Check Node CLI
-    if [ ! -f "${SCRIPT_DIR}/k-mosaic-node/k-mosaic-cli.ts" ]; then
+    if [ ! -f "${SCRIPT_DIR}/k-mosaic-node/src/k-mosaic-cli.ts" ]; then
         print_fail "Node CLI not found at ${SCRIPT_DIR}/k-mosaic-node/k-mosaic-cli.ts"
         exit 1
     fi
