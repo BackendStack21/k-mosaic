@@ -31,6 +31,8 @@ k-mosaic-cli sign verify -p sign.json -g sig.json
 | Encrypt message       | `k-mosaic-cli kem encrypt -p keys.json -m "text" -o enc.json`               |
 | Encrypt file          | `k-mosaic-cli kem encrypt -p keys.json -i file.txt -o enc.json`             |
 | Decrypt message       | `k-mosaic-cli kem decrypt -s keys.json -p keys.json -c enc.json -o out.txt` |
+| Encapsulate (KEM)     | `k-mosaic-cli kem encapsulate -p keys.json -o encap.json`                   |
+| Decapsulate (KEM)     | `k-mosaic-cli kem decapsulate -s keys.json -p keys.json -c encap.json`      |
 | Generate signing keys | `k-mosaic-cli sign keygen -l 128 -o sign.json`                              |
 | Sign message          | `k-mosaic-cli sign sign -s sign.json -p sign.json -m "text" -o sig.json`    |
 | Sign file             | `k-mosaic-cli sign sign -s sign.json -p sign.json -i file.txt -o sig.json`  |
@@ -219,10 +221,10 @@ When you generate keys with `keygen`, you get a JSON file containing:
 
 ### Global Options
 
-| Option     | Short | Description                        |
-| ---------- | ----- | ---------------------------------- |
+| Option     | Short | Description                               |
+| ---------- | ----- | ----------------------------------------- |
 | `--level`  | `-l`  | Security level: 128 or 256 (default: 128) |
-| `--output` | `-o`  | Output file path (default: stdout) |
+| `--output` | `-o`  | Output file path (default: stdout)        |
 
 ### KEM Operations
 
@@ -364,6 +366,118 @@ k-mosaic-cli kem decrypt \
   --ciphertext for-bob.json
 # Output: "Hi Bob!" (the original message from Alice)
 ```
+
+#### Encapsulate
+
+```bash
+k-mosaic-cli kem encapsulate --public-key <file> [OPTIONS]
+```
+
+Generates a shared secret and ciphertext using Key Encapsulation Mechanism (KEM).
+
+**What it does:**
+
+- Takes a recipient's public key
+- Generates a random shared secret
+- Encapsulates the shared secret into a ciphertext that only the recipient can decapsulate
+- Returns both the shared secret and ciphertext
+- This is the lower-level operation that `encrypt` uses internally
+
+**Who needs what:**
+
+- **You need:** The recipient's public key
+- **Recipient needs:** Their own secret key to decapsulate and recover the shared secret
+
+**Options:**
+
+- `--public-key`, `-p`: Path to recipient's public key (can be full keypair file or just public key)
+- `--output`, `-o`: Output file path (default: stdout)
+
+**Example:**
+
+```bash
+# Generate shared secret and ciphertext
+k-mosaic-cli kem encapsulate --public-key recipient-keypair.json --output encapsulation.json
+
+# Output file contains:
+# {
+#   "ciphertext": "base64-encoded-ciphertext...",
+#   "shared_secret": "base64-encoded-shared-secret..."
+# }
+```
+
+**Technical Details:**
+
+- `Encapsulate` and `Decapsulate` work at the KEM level (key exchange)
+- `Encrypt` and `Decrypt` are higher-level operations that use KEM internally
+- The shared secret from encapsulation can be used as a symmetric encryption key
+- This is useful if you want to implement custom symmetric encryption on top of KEM
+
+**Difference from Encrypt:**
+
+- **Encapsulate**: Returns the raw shared secret + ciphertext (for KEM key exchange)
+- **Encrypt**: Takes plaintext data and returns encrypted data (full end-to-end encryption)
+
+#### Decapsulate
+
+```bash
+k-mosaic-cli kem decapsulate --secret-key <file> --public-key <file> --ciphertext <file>
+```
+
+Recovers a shared secret from an encapsulated ciphertext.
+
+**What it does:**
+
+- Takes an encapsulated ciphertext and your secret key
+- Recovers the original shared secret that was generated during encapsulation
+- Only works if you have the correct secret key
+- Returns the shared secret (output to stdout as base64)
+
+**Who needs what:**
+
+- **You need:** Your own secret key AND public key, plus the ciphertext from encapsulation
+- **Note:** You can use your keypair file for both `--secret-key` and `--public-key`
+
+**Options:**
+
+- `--secret-key`, `-s`: Your secret key (can be full keypair file)
+- `--public-key`, `-p`: Your public key (can be same keypair file)
+- `--ciphertext`, `-c`: The ciphertext file from encapsulation
+
+**Example:**
+
+```bash
+# Decapsulate to recover the shared secret
+k-mosaic-cli kem decapsulate \
+  --secret-key my-keypair.json \
+  --public-key my-keypair.json \
+  --ciphertext encapsulation.json
+
+# Output: base64-encoded shared secret (printed to stdout)
+```
+
+**Real-world scenario:**
+
+```bash
+# Alice encapsulates a shared secret using Bob's public key
+k-mosaic-cli kem encapsulate --public-key bob-public.json --output to-bob.json
+
+# Alice sends to-bob.json to Bob
+
+# Bob decapsulates to recover the shared secret
+k-mosaic-cli kem decapsulate \
+  --secret-key bob-keypair.json \
+  --public-key bob-keypair.json \
+  --ciphertext to-bob.json
+# Output: The same shared secret that Alice encapsulated
+```
+
+**Technical Details:**
+
+- The shared secret can be used with symmetric encryption (like AES) for bulk data encryption
+- Both `Encapsulate` and `Decapsulate` are deterministic when given the same inputs
+- The ciphertext is much smaller than encrypted data because it contains the encapsulated secret, not the actual message
+- This is the classical KEM (Key Encapsulation Mechanism) pattern used in hybrid encryption
 
 ### Signature Operations
 
@@ -803,7 +917,6 @@ else
 fi
 ```
 
-
 ## File Formats
 
 ### Key Pair File (JSON)
@@ -905,7 +1018,6 @@ chmod 600 my-keypair.json
 **Choose the right security level:**
 
 - **MOS-128** (128-bit post-quantum security)
-
   - Recommended for most uses
   - Faster operations
   - Smaller key sizes (~2-3 KB)
@@ -1015,18 +1127,15 @@ For maximum security in production environments, consider using the Go implement
 ### Common Issues
 
 1. **"command not found" or "bun: command not found"**
-
    - Ensure Bun is installed: `curl -fsSL https://bun.sh/install | bash`
    - Verify installation: `bun --version`
    - Ensure the CLI is installed: `bun install -g k-mosaic`
 
 2. **"Permission denied" when running the CLI**
-
    - Make the script executable: `chmod +x src/k-mosaic-cli.ts`
    - Or run with: `bun src/k-mosaic-cli.ts`
 
 3. **"invalid key format"**
-
    - Ensure you're using the correct file format (JSON with base64-encoded keys)
    - Verify the file wasn't corrupted during transfer
    - Check that the file contains both `public_key` and `security_level` fields

@@ -13,6 +13,8 @@ import {
   verify,
   serializeSignature,
   deserializeSignature,
+  serializeCiphertext,
+  deserializeCiphertext,
   SecurityLevel,
   CLI_VERSION,
   MOSAICPublicKey,
@@ -306,6 +308,70 @@ kem
     },
   )
 
+kem
+  .command('encapsulate')
+  .description('Encapsulate (generate shared secret and ciphertext)')
+  .requiredOption('-p, --public-key <path>', 'Path to public key file')
+  .option('-o, --output <path>', 'Output file path')
+  .action(
+    async (options: {
+      publicKey: string
+      output?: string
+    }) => {
+      const pkFileData = await fs.readFile(options.publicKey, 'utf-8')
+      const pkFile = JSON.parse(pkFileData)
+      const publicKeyBytes = Buffer.from(pkFile.public_key, 'base64')
+      const publicKey = customDeserializePublicKey(publicKeyBytes)
+
+      const result = await encapsulate(publicKey)
+
+      const output = {
+        ciphertext: Buffer.from(serializeCiphertext(result.ciphertext)).toString('base64'),
+        shared_secret: Buffer.from(result.sharedSecret).toString('base64'),
+      }
+
+      await writeOutput(JSON.stringify(output, null, 2), options.output)
+    },
+  )
+
+kem
+  .command('decapsulate')
+  .description('Decapsulate (recover shared secret)')
+  .requiredOption('-s, --secret-key <path>', 'Path to secret key file')
+  .requiredOption('-p, --public-key <path>', 'Path to public key file')
+  .requiredOption('-c, --ciphertext <path>', 'Path to ciphertext file')
+  .action(
+    async (options: {
+      secretKey: string
+      publicKey: string
+      ciphertext: string
+    }) => {
+      const pkFileData = await fs.readFile(options.publicKey, 'utf-8')
+      const pkFile = JSON.parse(pkFileData)
+      const publicKeyBytes = Buffer.from(pkFile.public_key, 'base64')
+      const publicKey = customDeserializePublicKey(publicKeyBytes)
+
+      const skFileData = await fs.readFile(options.secretKey, 'utf-8')
+      const skFile = JSON.parse(skFileData)
+      const secretKeyJson = Buffer.from(skFile.secret_key, 'base64').toString(
+        'utf-8',
+      )
+      const secretKeyObj = JSON.parse(secretKeyJson)
+      const secretKey = secretKeyFromObject(secretKeyObj)
+
+      const ctFileData = await fs.readFile(options.ciphertext, 'utf-8')
+      const ctFile = JSON.parse(ctFileData)
+      const ciphertextBuffer = Buffer.from(ctFile.ciphertext, 'base64')
+      const ciphertextBytes = new Uint8Array(ciphertextBuffer.length)
+      ciphertextBytes.set(ciphertextBuffer)
+      const ciphertext = deserializeCiphertext(ciphertextBytes)
+
+      const sharedSecret = await decapsulate(ciphertext, secretKey, publicKey)
+
+      process.stdout.write(Buffer.from(sharedSecret).toString('base64'))
+    },
+  )
+
 const signCmd = program.command('sign').description('Signature operations')
 
 signCmd
@@ -316,7 +382,7 @@ signCmd
   .action(async (options: { level: string; output?: string }) => {
     const level =
       options.level === '256' ? SecurityLevel.MOS_256 : SecurityLevel.MOS_128
-    console.log(`Generating signing key pair for level ${level}...`)
+    console.log(`Generating Signature key pair for level ${level}...`)
 
     const { publicKey, secretKey } = await signGenerateKeyPair(level)
 
