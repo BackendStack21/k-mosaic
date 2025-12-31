@@ -15,7 +15,7 @@ import * as fs from 'fs/promises'
 import * as path from 'path'
 import * as os from 'os'
 
-const CLI_PATH = path.join(import.meta.dir, '..', 'k-mosaic-cli.ts')
+const CLI_PATH = path.join(import.meta.dir, '..', 'src/k-mosaic-cli.ts')
 
 // Temp directory for test files
 let tempDir: string
