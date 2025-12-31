@@ -221,7 +221,7 @@ export default crypto
 // Version Information
 // =============================================================================
 
-export const CLI_VERSION = '0.1.0'
+export const CLI_VERSION = '1.0.0'
 export const ALGORITHM_NAME = 'kMOSAIC'
 export const ALGORITHM_VERSION = '1.0'
 
