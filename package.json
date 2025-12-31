@@ -1,6 +1,6 @@
 {
   "name": "k-mosaic",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "kMOSAIC: A Novel Post-Quantum Cryptographic Algorithm with Heterogeneous Hardness",
   "type": "module",
   "main": "lib/index.js",
