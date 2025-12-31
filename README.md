@@ -184,132 +184,432 @@ All three shares are required to recover the secret, and the binding ensures the
 
 ```typescript
 // Security levels
-SecurityLevel.MOS_128  // 128-bit post-quantum security
-SecurityLevel.MOS_256  // 256-bit post-quantum security
+enum SecurityLevel {
+  MOS_128 = 'MOS-128'  // 128-bit post-quantum security
+  MOS_256 = 'MOS-256'  // 256-bit post-quantum security
+}
 
 // Parameter sets
-MOS_128: MOSAICParams  // MOS-128 parameters
-MOS_256: MOSAICParams  // MOS-256 parameters
 getParams(level: SecurityLevel): MOSAICParams
 validateParams(params: MOSAICParams): void
+
+const MOS_128: MOSAICParams  // MOS-128 parameter set
+const MOS_256: MOSAICParams  // MOS-256 parameter set
+```
+
+#### Parameter and Key Structures
+
+```typescript
+interface MOSAICParams {
+  level: SecurityLevel
+  slss: SLSSParams
+  tdd: TDDParams
+  egrw: EGRWParams
+}
+
+interface MOSAICPublicKey {
+  slss: SLSSPublicKey
+  tdd: TDDPublicKey
+  egrw: EGRWPublicKey
+  binding: Uint8Array    // 32-byte cryptographic binding hash
+  params: MOSAICParams
+}
+
+interface MOSAICSecretKey {
+  slss: SLSSSecretKey
+  tdd: TDDSecretKey
+  egrw: EGRWSecretKey
+  seed: Uint8Array       // Original seed for implicit rejection
+  publicKeyHash: Uint8Array
+}
+
+interface MOSAICKeyPair {
+  publicKey: MOSAICPublicKey
+  secretKey: MOSAICSecretKey
+}
+
+interface MOSAICCiphertext {
+  c1: SLSSCiphertext
+  c2: TDDCiphertext
+  c3: EGRWCiphertext
+  proof: Uint8Array
+}
+
+interface MOSAICSignature {
+  commitment: Uint8Array  // 32 bytes
+  challenge: Uint8Array   // 32 bytes
+  response: Uint8Array    // 64 bytes
+}
+
+interface EncapsulationResult {
+  sharedSecret: Uint8Array
+  ciphertext: MOSAICCiphertext
+}
+
+interface SecurityAnalysis {
+  slss: { dimension: number; sparsity: number; estimatedSecurity: number }
+  tdd: { tensorDim: number; rank: number; estimatedSecurity: number }
+  egrw: { graphSize: number; walkLength: number; estimatedSecurity: number }
+  combined: { estimatedSecurity: number; quantumSecurity: number }
+}
 ```
 
 ### KEM Functions
 
 ```typescript
 // Key generation
-kemGenerateKeyPair(level?: SecurityLevel): Promise<MOSAICKeyPair>
-kemGenerateKeyPairFromSeed(seed: Uint8Array, level?: SecurityLevel): Promise<MOSAICKeyPair>
+generateKeyPair(level?: SecurityLevel): Promise<MOSAICKeyPair>
+generateKeyPairFromSeed(params: MOSAICParams, seed: Uint8Array): MOSAICKeyPair
 
 // Encapsulation/Decapsulation
-encapsulate(publicKey: MOSAICPublicKey): Promise<{ ciphertext: MOSAICCiphertext, sharedSecret: Uint8Array }>
-encapsulateDeterministic(publicKey: MOSAICPublicKey, ephemeralSecret: Uint8Array): Promise<{ ciphertext: MOSAICCiphertext, sharedSecret: Uint8Array }>
-decapsulate(ciphertext: MOSAICCiphertext, secretKey: MOSAICSecretKey, publicKey: MOSAICPublicKey): Promise<Uint8Array>
+encapsulate(publicKey: MOSAICPublicKey): Promise<EncapsulationResult>
+encapsulateDeterministic(
+  publicKey: MOSAICPublicKey,
+  ephemeralSecret: Uint8Array
+): EncapsulationResult
 
-// Hybrid encryption
-encrypt(message: Uint8Array, publicKey: MOSAICPublicKey): Promise<Uint8Array>
-decrypt(ciphertext: Uint8Array, secretKey: MOSAICSecretKey, publicKey: MOSAICPublicKey): Promise<Uint8Array>
+decapsulate(
+  ciphertext: MOSAICCiphertext,
+  secretKey: MOSAICSecretKey,
+  publicKey: MOSAICPublicKey
+): Promise<Uint8Array>
+
+// Hybrid encryption (message encryption with AES-256-GCM)
+encrypt(plaintext: Uint8Array, publicKey: MOSAICPublicKey): Promise<Uint8Array>
+decrypt(
+  ciphertext: Uint8Array,
+  secretKey: MOSAICSecretKey,
+  publicKey: MOSAICPublicKey
+): Promise<Uint8Array>
 
 // Serialization
 serializePublicKey(pk: MOSAICPublicKey): Uint8Array
+deserializePublicKey(data: Uint8Array): MOSAICPublicKey
 serializeCiphertext(ct: MOSAICCiphertext): Uint8Array
 deserializeCiphertext(data: Uint8Array): MOSAICCiphertext
 
 // Analysis
-analyzePublicKey(pk: MOSAICPublicKey): SecurityAnalysis
+analyzePublicKey(publicKey: MOSAICPublicKey): SecurityAnalysis
 ```
 
 ### Signature Functions
 
 ```typescript
 // Key generation
-signGenerateKeyPair(level?: SecurityLevel): Promise<MOSAICKeyPair>
-signGenerateKeyPairFromSeed(seed: Uint8Array, level?: SecurityLevel): Promise<MOSAICKeyPair>
+generateKeyPair(level?: SecurityLevel): Promise<MOSAICKeyPair>
+generateKeyPairFromSeed(params: MOSAICParams, seed: Uint8Array): MOSAICKeyPair
 
 // Signing and verification
-sign(message: Uint8Array, secretKey: MOSAICSecretKey, publicKey: MOSAICPublicKey): Promise<MOSAICSignature>
-verify(message: Uint8Array, signature: MOSAICSignature, publicKey: MOSAICPublicKey): Promise<boolean>
+sign(
+  message: Uint8Array,
+  secretKey: MOSAICSecretKey,
+  publicKey: MOSAICPublicKey
+): Promise<MOSAICSignature>
+
+verify(
+  message: Uint8Array,
+  signature: MOSAICSignature,
+  publicKey: MOSAICPublicKey
+): Promise<boolean>
 
 // Serialization
 serializeSignature(sig: MOSAICSignature): Uint8Array
 deserializeSignature(data: Uint8Array): MOSAICSignature
+serializePublicKey(pk: MOSAICPublicKey): Uint8Array
 ```
 
 ### Cryptographic Utilities
 
+#### Random Number Generation
+
 ```typescript
-// Random number generation
 secureRandomBytes(length: number): Uint8Array
+randomInt(max: number): number
+randomIntRange(min: number, max: number): number
+randomZq(q: number): number
 randomVectorZq(n: number, q: number): Int32Array
-randomSparseVector(n: number, w: number): Int32Array
+randomSparseVector(n: number, w: number): Int8Array
+sampleGaussian(sigma: number): number
 sampleGaussianVector(n: number, sigma: number): Int32Array
-
-// Hashing functions
-shake256(input: Uint8Array, length: number): Uint8Array
-sha3_256(input: Uint8Array): Uint8Array
-hashConcat(...inputs: Uint8Array[]): Uint8Array
-hashWithDomain(domain: string, data: Uint8Array): Uint8Array
-
-// Constant-time operations
-constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean
-constantTimeSelect(condition: number, a: Uint8Array, b: Uint8Array): Uint8Array
-zeroize(arr: Int8Array | Uint8Array | Int32Array): void
-SecureBuffer(length: number): SecureBuffer
+deterministicBytes(seed: Uint8Array, length: number, context?: Uint8Array): Uint8Array
+expandSeed(seed: Uint8Array, count: number, seedLength?: number): Uint8Array[]
+validateSeedEntropy(seed: Uint8Array): void
 ```
 
-### Entanglement & Proofs
+#### Hashing Functions
+
+```typescript
+shake256(input: Uint8Array, outputLength: number): Uint8Array
+shake256Fallback(input: Uint8Array, outputLength: number): Uint8Array
+sha3_256(input: Uint8Array): Uint8Array
+hashConcat(...inputs: Uint8Array[]): Uint8Array
+hashWithDomain(domain: string, input: Uint8Array): Uint8Array
+isNativeShake256Available(): boolean
+```
+
+#### Constant-Time Operations
+
+```typescript
+constantTimeEqual(a: Uint8Array, b: Uint8Array): boolean
+constantTimeSelect(condition: number, a: Uint8Array, b: Uint8Array): Uint8Array
+constantTimeSelectInt32(condition: number, a: Int32Array, b: Int32Array): Int32Array
+constantTimeLessThan(a: number, b: number): number
+constantTimeAbs(x: number): number
+constantTimeMod(x: number, q: number): number
+zeroize(buffer: Uint8Array | Int8Array | Int32Array): void
+```
+
+#### Secure Buffer
+
+```typescript
+class SecureBuffer {
+  constructor(lengthOrData: number | Uint8Array)
+  get buffer(): Uint8Array
+  get length(): number
+  get isDisposed(): boolean
+  dispose(): void
+  clone(): SecureBuffer
+  randomize(): void
+  [Symbol.dispose](): void
+}
+```
+
+### Entanglement & Cryptographic Binding
 
 ```typescript
 // Secret sharing
 secretShare(secret: Uint8Array, n: number): Uint8Array[]
 secretReconstruct(shares: Uint8Array[]): Uint8Array
+secretShareDeterministic(
+  secret: Uint8Array,
+  n: number,
+  seed: Uint8Array
+): Uint8Array[]
 
-// Commitments
-computeBinding(...parts: Uint8Array[]): Uint8Array
-createCommitment(data: Uint8Array): { commitment: Uint8Array, opening: Uint8Array }
-verifyCommitment(commitment: Uint8Array, data: Uint8Array, opening: Uint8Array): boolean
+// Commitments and binding
+interface BindingCommitment {
+  commitment: Uint8Array
+  opening: Uint8Array
+}
 
-// Zero-knowledge proofs
-generateNIZKProof(...): NIZKProof
-verifyNIZKProof(proof: NIZKProof, ...): boolean
+createCommitment(data: Uint8Array): BindingCommitment
+verifyCommitment(
+  data: Uint8Array,
+  commitment: Uint8Array,
+  opening: Uint8Array
+): boolean
+
+computeBinding(
+  slssData: Uint8Array,
+  tddData: Uint8Array,
+  egrwData: Uint8Array
+): Uint8Array
+
+// NIZK proofs
+interface NIZKProof {
+  challenge: Uint8Array
+  responses: Uint8Array[]
+  commitments: Uint8Array[]
+}
+
+generateNIZKProof(
+  message: Uint8Array,
+  shares: Uint8Array[],
+  ciphertextHashes: Uint8Array[],
+  randomness: Uint8Array
+): NIZKProof
+
+verifyNIZKProof(
+  proof: NIZKProof,
+  ciphertextHashes: Uint8Array[],
+  message: Uint8Array
+): boolean
+
+serializeNIZKProof(proof: NIZKProof): Uint8Array
+deserializeNIZKProof(data: Uint8Array): NIZKProof
 ```
 
 ### Low-Level Problem APIs (Advanced)
 
 For direct access to individual hard problems:
 
+#### SLSS (Sparse Lattice Subset Sum)
+
 ```typescript
-// SLSS (Sparse Lattice Subset Sum)
-slssKeyGen(seed: Uint8Array, params: SLSSParams): { publicKey: SLSSPublicKey, secretKey: SLSSSecretKey }
-slssEncrypt(message: Uint8Array, publicKey: SLSSPublicKey, randomness: Uint8Array): SLSSCiphertext
-slssDecrypt(ciphertext: SLSSCiphertext, secretKey: SLSSSecretKey): Uint8Array
+interface SLSSPublicKey {
+  A: Int32Array  // m x n matrix (flattened)
+  t: Int32Array  // m-vector
+}
 
-// TDD (Tensor Decomposition Distinguishing)
-tddKeyGen(seed: Uint8Array, params: TDDParams): { publicKey: TDDPublicKey, secretKey: TDDSecretKey }
-tddEncrypt(message: Uint8Array, publicKey: TDDPublicKey, randomness: Uint8Array): TDDCiphertext
-tddDecrypt(ciphertext: TDDCiphertext, secretKey: TDDSecretKey): Uint8Array
+interface SLSSSecretKey {
+  s: Int8Array   // Sparse n-vector in {-1, 0, 1}
+}
 
-// EGRW (Expander Graph Random Walk)
-egrwKeyGen(seed: Uint8Array, params: EGRWParams): { publicKey: EGRWPublicKey, secretKey: EGRWSecretKey }
-egrwEncrypt(message: Uint8Array, publicKey: EGRWPublicKey, randomness: Uint8Array): EGRWCiphertext
-egrwDecrypt(ciphertext: EGRWCiphertext, secretKey: EGRWSecretKey): Uint8Array
+interface SLSSCiphertext {
+  u: Int32Array
+  v: Int32Array
+}
+
+interface SLSSKeyPair {
+  publicKey: SLSSPublicKey
+  secretKey: SLSSSecretKey
+}
+
+slssKeyGen(params: SLSSParams, seed: Uint8Array): SLSSKeyPair
+slssEncrypt(
+  publicKey: SLSSPublicKey,
+  message: Uint8Array,
+  params: SLSSParams,
+  randomness: Uint8Array
+): SLSSCiphertext
+
+slssDecrypt(
+  ciphertext: SLSSCiphertext,
+  secretKey: SLSSSecretKey,
+  params: SLSSParams
+): Uint8Array
+
+slssSerializePublicKey(pk: SLSSPublicKey): Uint8Array
+slssDeserializePublicKey(data: Uint8Array): SLSSPublicKey
+```
+
+#### TDD (Tensor Decomposition Distinguishing)
+
+```typescript
+interface TDDPublicKey {
+  T: Int32Array  // n x n x n tensor (flattened)
+}
+
+interface TDDSecretKey {
+  factors: {
+    a: Int32Array[]
+    b: Int32Array[]
+    c: Int32Array[]
+  }
+}
+
+interface TDDCiphertext {
+  data: Int32Array
+}
+
+interface TDDKeyPair {
+  publicKey: TDDPublicKey
+  secretKey: TDDSecretKey
+}
+
+tddKeyGen(params: TDDParams, seed: Uint8Array): TDDKeyPair
+tddEncrypt(
+  publicKey: TDDPublicKey,
+  message: Uint8Array,
+  params: TDDParams,
+  randomness: Uint8Array
+): TDDCiphertext
+
+tddDecrypt(
+  ciphertext: TDDCiphertext,
+  secretKey: TDDSecretKey,
+  params: TDDParams
+): Uint8Array
+
+tddSerializePublicKey(pk: TDDPublicKey): Uint8Array
+tddDeserializePublicKey(data: Uint8Array): TDDPublicKey
+```
+
+#### EGRW (Expander Graph Random Walk)
+
+```typescript
+interface SL2Element {
+  a: number; b: number; c: number; d: number
+}
+
+interface EGRWPublicKey {
+  vStart: SL2Element
+  vEnd: SL2Element
+}
+
+interface EGRWSecretKey {
+  walk: number[]  // Sequence of generator indices
+}
+
+interface EGRWCiphertext {
+  vertex: SL2Element
+  commitment: Uint8Array
+}
+
+interface EGRWKeyPair {
+  publicKey: EGRWPublicKey
+  secretKey: EGRWSecretKey
+}
+
+egrwKeyGen(params: EGRWParams, seed: Uint8Array): EGRWKeyPair
+egrwEncrypt(
+  publicKey: EGRWPublicKey,
+  message: Uint8Array,
+  params: EGRWParams,
+  randomness: Uint8Array
+): EGRWCiphertext
+
+egrwDecrypt(
+  ciphertext: EGRWCiphertext,
+  secretKey: EGRWSecretKey,
+  publicKey: EGRWPublicKey,
+  params: EGRWParams
+): Uint8Array
+
+egrwSerializePublicKey(pk: EGRWPublicKey): Uint8Array
+egrwDeserializePublicKey(data: Uint8Array): EGRWPublicKey
+
+// SL(2, Z_p) utilities
+getGenerators(p: number): SL2Element[]
+modInverse(a: number, p: number): number
+sl2ToBytes(element: SL2Element): Uint8Array
+bytesToSl2(data: Uint8Array): SL2Element
+evictOldestCacheEntries(): void
+```
+
+### Convenience API
+
+```typescript
+// The library also provides a convenience object for async operations:
+import crypto from 'k-mosaic'
+
+const keyPair = await crypto.kem.generateKeyPair()
+const { ciphertext, sharedSecret } = await crypto.kem.encapsulate(keyPair.publicKey)
+
+const signature = await crypto.sign.sign(message, keyPair.secretKey, keyPair.publicKey)
+const isValid = await crypto.sign.verify(message, signature, keyPair.publicKey)
 ```
 
 ### Version Information
 
 ```typescript
-VERSION: string           // Library version
-ALGORITHM_NAME: string    // "kMOSAIC"
-ALGORITHM_VERSION: string // Algorithm version
-ALGORITHM_INFO: {         // Complete algorithm metadata
+const ALGORITHM_NAME = 'kMOSAIC'     // Algorithm name
+const ALGORITHM_VERSION = '1.0'      // Algorithm version
+const CLI_VERSION = '1.0.0'          // CLI version
+
+interface AlgorithmInfo {
   name: string
   fullName: string
   version: string
   securityLevels: SecurityLevel[]
-  hardProblems: Array<{ name, fullName, description, complexity }>
-  entanglement: { description, benefit }
-  features: { kem, signatures, hybridReady }
+  hardProblems: Array<{
+    name: string
+    fullName: string
+    description: string
+    complexity: string
+  }>
+  entanglement: {
+    description: string
+    benefit: string
+  }
+  features: {
+    kem: string
+    signatures: string
+    hybridReady: string
+  }
 }
+
+const ALGORITHM_INFO: AlgorithmInfo
 ```
 
 ## ⚠️ Disclaimer
