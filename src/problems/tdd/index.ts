@@ -613,8 +613,14 @@ export function tddSerializePublicKey(pk: TDDPublicKey): Uint8Array {
  * @returns Public key
  */
 export function tddDeserializePublicKey(data: Uint8Array): TDDPublicKey {
+  if (data.length < 4) throw new Error('Invalid TDD public key: too short')
   const view = new DataView(data.buffer, data.byteOffset)
   const len = view.getUint32(0, true)
+  const MAX_PART = 8 * 1024 * 1024 // 8 MB cap for public key component
+  if (len <= 0 || len > MAX_PART || 4 + len > data.length)
+    throw new Error('Invalid TDD public key: length out of bounds or too large')
+  if (len % 4 !== 0)
+    throw new Error('Invalid TDD public key: length not multiple of 4')
   // Copy to a new buffer to ensure proper ownership and alignment
   const tBytes = data.slice(4, 4 + len)
   const T = new Int32Array(tBytes.buffer, tBytes.byteOffset, len / 4)

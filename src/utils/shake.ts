@@ -252,3 +252,13 @@ export function hashWithDomain(domain: string, input: Uint8Array): Uint8Array {
 
   return result
 }
+
+/**
+ * Query whether native SHAKE256 is available in this runtime.
+ * Useful for application code that wants to enforce native-XOF availability
+ * (recommended for production deployments). Returns true if native SHAKE256
+ * is available, false otherwise.
+ */
+export function isNativeShake256Available(): boolean {
+  return checkNativeShake256()
+}

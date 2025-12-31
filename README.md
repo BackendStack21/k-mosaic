@@ -155,6 +155,8 @@ binding = H(SLSS_pk || TDD_pk || EGRW_pk)
 
 All three shares are required to recover the secret, and the binding ensures the three problem instances are cryptographically linked.
 
+> ⚠️ Implementation note: the library prefers native SHAKE256 (XOF) support. If the runtime lacks native SHAKE256, kMOSAIC falls back to a counter-mode SHA3-256 based construction which may not provide the same security margins as a native XOF. For production deployments, ensure your runtime supports SHAKE256 or use an environment that provides it.
+
 ### Hard Problems
 
 #### SLSS (Sparse Lattice Subset Sum)
