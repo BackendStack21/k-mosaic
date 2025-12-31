@@ -673,18 +673,36 @@ export function slssSerializePublicKey(pk: SLSSPublicKey): Uint8Array {
  * @returns Public key
  */
 export function slssDeserializePublicKey(data: Uint8Array): SLSSPublicKey {
+  if (data.length < 8) throw new Error('Invalid SLSS public key: too short')
   const view = new DataView(data.buffer, data.byteOffset)
 
   let offset = 0
   const aLen = view.getUint32(offset, true)
   offset += 4
+  const MAX_PART = 8 * 1024 * 1024 // 8 MB cap for public key component
+  if (aLen <= 0 || aLen > MAX_PART || offset + aLen > data.length)
+    throw new Error(
+      'Invalid SLSS public key: A component out of bounds or too large',
+    )
+  if (aLen % 4 !== 0)
+    throw new Error('Invalid SLSS public key: A length not multiple of 4')
+
   // Copy to a new buffer to ensure proper ownership and alignment
   const aBytes = data.slice(offset, offset + aLen)
   const A = new Int32Array(aBytes.buffer, aBytes.byteOffset, aLen / 4)
   offset += aLen
 
+  if (offset + 4 > data.length)
+    throw new Error('Invalid SLSS public key: truncated t length')
   const tLen = view.getUint32(offset, true)
   offset += 4
+  if (tLen <= 0 || tLen > MAX_PART || offset + tLen > data.length)
+    throw new Error(
+      'Invalid SLSS public key: t component out of bounds or too large',
+    )
+  if (tLen % 4 !== 0)
+    throw new Error('Invalid SLSS public key: t length not multiple of 4')
+
   // Copy to a new buffer to ensure proper ownership and alignment
   const tBytes = data.slice(offset, offset + tLen)
   const t = new Int32Array(tBytes.buffer, tBytes.byteOffset, tLen / 4)

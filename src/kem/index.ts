@@ -365,7 +365,14 @@ export async function decapsulate(
 
   // Compute implicit rejection value first (constant-time protection)
   // This is returned if any validation fails
-  const ciphertextBytes = serializeCiphertext(ciphertext)
+  let ciphertextBytes: Uint8Array
+  try {
+    ciphertextBytes = serializeCiphertext(ciphertext)
+  } catch {
+    // Malformed ciphertext serialization — use empty buffer and mark invalid
+    ciphertextBytes = new Uint8Array(0)
+  }
+
   const implicitRejectSecret = shake256(
     hashWithDomain(DOMAIN_IMPLICIT_REJECT, hashConcat(seed, ciphertextBytes)),
     32,
@@ -373,33 +380,93 @@ export async function decapsulate(
 
   let validDecapsulation = 1 // 1 = valid, 0 = invalid
 
-  // Decrypt each fragment
-  const share1 = slssDecrypt(c1, slssSK, params.slss)
-  const share2 = tddDecrypt(c2, tddSK, params.tdd)
-  const share3 = egrwDecrypt(c3, egrwSK, egrwPK, params.egrw)
+  // Quick sanity: ensure public key matches secret key's recorded hash
+  try {
+    const pkHash = sha3_256(serializePublicKey(publicKey))
+    if (!constantTimeEqual(pkHash, publicKeyHash)) {
+      validDecapsulation = 0
+    }
+  } catch {
+    // If serialization of public key fails, mark invalid but continue
+    validDecapsulation = 0
+  }
 
-  // Reconstruct ephemeral secret
-  const recoveredSecret = secretReconstruct([share1, share2, share3])
+  // Decrypt each fragment with safe failure handling
+  let share1: Uint8Array = new Uint8Array(32)
+  let share2: Uint8Array = new Uint8Array(32)
+  let share3: Uint8Array = new Uint8Array(32)
 
-  // Fujisaki-Okamoto re-encryption check
-  // Re-encapsulate with recovered secret and verify ciphertext matches
-  const reEncapsulated = encapsulateDeterministic(publicKey, recoveredSecret)
-  const reEncapsulatedBytes = serializeCiphertext(reEncapsulated.ciphertext)
+  try {
+    const s1 = slssDecrypt(c1, slssSK, params.slss)
+    if (s1.length === 32) share1 = s1
+    else {
+      validDecapsulation = 0
+    }
+  } catch {
+    validDecapsulation = 0
+  }
 
-  // Constant-time comparison of ciphertexts
-  if (!constantTimeEqual(ciphertextBytes, reEncapsulatedBytes)) {
+  try {
+    const s2 = tddDecrypt(c2, tddSK, params.tdd)
+    if (s2.length === 32) share2 = s2
+    else {
+      validDecapsulation = 0
+    }
+  } catch {
+    validDecapsulation = 0
+  }
+
+  try {
+    const s3 = egrwDecrypt(c3, egrwSK, egrwPK, params.egrw)
+    if (s3.length === 32) share3 = s3
+    else {
+      validDecapsulation = 0
+    }
+  } catch {
+    validDecapsulation = 0
+  }
+
+  // Reconstruct ephemeral secret (shares are normalized to 32 bytes)
+  let recoveredSecret: Uint8Array
+  try {
+    recoveredSecret = secretReconstruct([share1, share2, share3])
+  } catch {
+    // Reconstruction failure — use zeroed secret and mark invalid
+    recoveredSecret = new Uint8Array(32)
+    validDecapsulation = 0
+  }
+
+  // Fujisaki-Okamoto re-encryption check (compare hashes to avoid length leaks)
+  let reEncapsulatedBytes: Uint8Array
+  try {
+    const reEncapsulated = encapsulateDeterministic(publicKey, recoveredSecret)
+    reEncapsulatedBytes = serializeCiphertext(reEncapsulated.ciphertext)
+  } catch {
+    reEncapsulatedBytes = new Uint8Array(0)
+    validDecapsulation = 0
+  }
+
+  // Compare fixed-length hashes (constant-time)
+  const originalCtHash = sha3_256(ciphertextBytes)
+  const reCtHash = sha3_256(reEncapsulatedBytes)
+  if (!constantTimeEqual(originalCtHash, reCtHash)) {
     validDecapsulation = 0
   }
 
   // Verify NIZK proof (additional check)
-  const proof = deserializeNIZKProof(proofBytes)
-  const ciphertextHashes = [
-    sha3_256(serializeSLSSCiphertext(c1)),
-    sha3_256(serializeTDDCiphertext(c2)),
-    sha3_256(serializeEGRWCiphertext(c3)),
-  ]
+  try {
+    const proof = deserializeNIZKProof(proofBytes)
+    const ciphertextHashes = [
+      sha3_256(serializeSLSSCiphertext(c1)),
+      sha3_256(serializeTDDCiphertext(c2)),
+      sha3_256(serializeEGRWCiphertext(c3)),
+    ]
 
-  if (!verifyNIZKProof(proof, ciphertextHashes, recoveredSecret)) {
+    if (!verifyNIZKProof(proof, ciphertextHashes, recoveredSecret)) {
+      validDecapsulation = 0
+    }
+  } catch {
+    // Any failure in proof parsing or verification marks invalid
     validDecapsulation = 0
   }
 
@@ -730,17 +797,38 @@ export function serializeCiphertext(ct: MOSAICCiphertext): Uint8Array {
  * @returns Ciphertext object
  */
 export function deserializeCiphertext(data: Uint8Array): MOSAICCiphertext {
+  // Basic bounds checks
+  if (data.length < 4) throw new Error('Invalid ciphertext: too short')
+
   const view = new DataView(data.buffer, data.byteOffset)
   let offset = 0
 
   // c1
+  if (offset + 4 > data.length)
+    throw new Error('Invalid ciphertext: truncated c1 length')
   const c1Len = view.getUint32(offset, true)
   offset += 4
+  const MAX_PART = 8 * 1024 * 1024 // 8 MB per component to prevent resource exhaustion (supports MOS-256 public keys)
+  if (c1Len <= 0 || c1Len > MAX_PART || offset + c1Len > data.length)
+    throw new Error('Invalid ciphertext: c1 extends beyond data or too large')
   const c1Start = offset
   const c1View = new DataView(data.buffer, data.byteOffset + c1Start)
+
+  // Validate SLSS component structure
+  if (c1Len < 8) throw new Error('Invalid SLSS ciphertext: too short')
   const uLen = c1View.getUint32(0, true)
-  const u = new Int32Array(data.buffer, data.byteOffset + c1Start + 4, uLen / 4)
+  if (uLen % 4 !== 0)
+    throw new Error('Invalid SLSS ciphertext: u length not multiple of 4')
+  if (4 + uLen + 4 > c1Len)
+    throw new Error('Invalid SLSS ciphertext: malformed lengths')
+
   const vLen = c1View.getUint32(4 + uLen, true)
+  if (4 + uLen + 4 + vLen !== c1Len)
+    throw new Error('Invalid SLSS ciphertext: length mismatch')
+  if (vLen % 4 !== 0)
+    throw new Error('Invalid SLSS ciphertext: v length not multiple of 4')
+
+  const u = new Int32Array(data.buffer, data.byteOffset + c1Start + 4, uLen / 4)
   const v = new Int32Array(
     data.buffer,
     data.byteOffset + c1Start + 8 + uLen,
@@ -749,13 +837,19 @@ export function deserializeCiphertext(data: Uint8Array): MOSAICCiphertext {
   offset += c1Len
 
   // c2
+  if (offset + 4 > data.length)
+    throw new Error('Invalid ciphertext: truncated c2 length')
   const c2Len = view.getUint32(offset, true)
   offset += 4
+  if (c2Len <= 0 || c2Len > MAX_PART || offset + c2Len > data.length)
+    throw new Error('Invalid ciphertext: c2 extends beyond data or too large')
   const c2Start = offset
-  const c2DataLen = new DataView(
-    data.buffer,
-    data.byteOffset + c2Start,
-  ).getUint32(0, true)
+  const c2View = new DataView(data.buffer, data.byteOffset + c2Start)
+  const c2DataLen = c2View.getUint32(0, true)
+  if (4 + c2DataLen !== c2Len)
+    throw new Error('Invalid TDD ciphertext: length mismatch')
+  if (c2DataLen % 4 !== 0)
+    throw new Error('Invalid TDD ciphertext: data length not multiple of 4')
   const tddData = new Int32Array(
     data.buffer,
     data.byteOffset + c2Start + 4,
@@ -764,8 +858,12 @@ export function deserializeCiphertext(data: Uint8Array): MOSAICCiphertext {
   offset += c2Len
 
   // c3
+  if (offset + 4 > data.length)
+    throw new Error('Invalid ciphertext: truncated c3 length')
   const c3Len = view.getUint32(offset, true)
   offset += 4
+  if (c3Len <= 16 || c3Len > MAX_PART || offset + c3Len > data.length)
+    throw new Error('Invalid EGRW ciphertext: malformed c3 or too large')
   const c3Start = offset
   const vertexView = new DataView(data.buffer, data.byteOffset + c3Start)
   const vertex = {
@@ -851,38 +949,60 @@ export function serializePublicKey(pk: MOSAICPublicKey): Uint8Array {
  * Format: [level_len:4][level_string][slss_len:4][slss_data][tdd_len:4][tdd_data][egrw_len:4][egrw_data][binding:32]
  */
 export function deserializePublicKey(data: Uint8Array): MOSAICPublicKey {
+  // Basic bounds check
+  if (data.length < 4) throw new Error('Invalid public key: too short')
+
   const view = new DataView(data.buffer, data.byteOffset)
   let offset = 0
 
   // Read security level string
+  if (offset + 4 > data.length)
+    throw new Error('Invalid public key: truncated level length')
   const levelLen = view.getUint32(offset, true)
   offset += 4
+  if (levelLen <= 0 || offset + levelLen > data.length || levelLen > 255)
+    throw new Error('Invalid public key: level length invalid')
+
   const levelBytes = data.slice(offset, offset + levelLen)
   const level = new TextDecoder().decode(levelBytes) as SecurityLevel
   offset += levelLen
 
-  // Get params from level
+  // Get params from level (may throw if level unknown)
   const params = getParams(level)
 
   // Read SLSS public key
+  if (offset + 4 > data.length)
+    throw new Error('Invalid public key: truncated SLSS length')
   const slssLen = view.getUint32(offset, true)
   offset += 4
+  if (slssLen <= 0 || offset + slssLen > data.length)
+    throw new Error('Invalid public key: SLSS component out of bounds')
   const slss = slssDeserializePublicKey(data.slice(offset, offset + slssLen))
   offset += slssLen
 
   // Read TDD public key
+  if (offset + 4 > data.length)
+    throw new Error('Invalid public key: truncated TDD length')
   const tddLen = view.getUint32(offset, true)
   offset += 4
+  if (tddLen <= 0 || offset + tddLen > data.length)
+    throw new Error('Invalid public key: TDD component out of bounds')
   const tdd = tddDeserializePublicKey(data.slice(offset, offset + tddLen))
   offset += tddLen
 
   // Read EGRW public key
+  if (offset + 4 > data.length)
+    throw new Error('Invalid public key: truncated EGRW length')
   const egrwLen = view.getUint32(offset, true)
   offset += 4
+  if (egrwLen <= 0 || offset + egrwLen > data.length)
+    throw new Error('Invalid public key: EGRW component out of bounds')
   const egrw = egrwDeserializePublicKey(data.slice(offset, offset + egrwLen))
   offset += egrwLen
 
   // Read binding (fixed 32 bytes)
+  if (offset + 32 > data.length)
+    throw new Error('Invalid public key: missing binding')
   const binding = data.slice(offset, offset + 32)
 
   return { slss, tdd, egrw, binding, params }

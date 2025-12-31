@@ -346,24 +346,35 @@ export function serializeSignature(sig: MOSAICSignature): Uint8Array {
  * @returns Deserialized signature object
  */
 export function deserializeSignature(data: Uint8Array): MOSAICSignature {
+  if (data.length < 12) throw new Error('Invalid signature: too short')
   const view = new DataView(data.buffer, data.byteOffset)
   let offset = 0
 
   // Commitment
   const commitmentLen = view.getUint32(offset, true)
   offset += 4
+  if (commitmentLen <= 0 || offset + commitmentLen > data.length)
+    throw new Error('Invalid signature: malformed commitment')
   const commitment = data.slice(offset, offset + commitmentLen)
   offset += commitmentLen
 
   // Challenge
+  if (offset + 4 > data.length)
+    throw new Error('Invalid signature: truncated challenge length')
   const challengeLen = view.getUint32(offset, true)
   offset += 4
+  if (challengeLen <= 0 || offset + challengeLen > data.length)
+    throw new Error('Invalid signature: malformed challenge')
   const challenge = data.slice(offset, offset + challengeLen)
   offset += challengeLen
 
   // Response
+  if (offset + 4 > data.length)
+    throw new Error('Invalid signature: truncated response length')
   const responseLen = view.getUint32(offset, true)
   offset += 4
+  if (responseLen <= 0 || offset + responseLen > data.length)
+    throw new Error('Invalid signature: malformed response')
   const response = data.slice(offset, offset + responseLen)
 
   return { commitment, challenge, response }

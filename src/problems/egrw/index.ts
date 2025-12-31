@@ -486,6 +486,8 @@ export function egrwSerializePublicKey(pk: EGRWPublicKey): Uint8Array {
  * @returns Public key
  */
 export function egrwDeserializePublicKey(data: Uint8Array): EGRWPublicKey {
+  if (data.length < 32)
+    throw new Error('Invalid EGRW public key: expected 32 bytes')
   const vStart = bytesToSl2(data.slice(0, 16))
   const vEnd = bytesToSl2(data.slice(16, 32))
   return { vStart, vEnd }

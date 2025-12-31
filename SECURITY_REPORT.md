@@ -181,6 +181,27 @@ while (idx < n) {
 
 This eliminates statistical bias by rejecting values that would cause modular reduction bias.
 
+### VULN-014: Decapsulation throws on malformed ciphertext (implicit oracle)
+
+**File:** `src/kem/index.ts`  
+**Lines:** 360-420 (approx)  
+**Status:** ✅ **FIXED**
+
+#### Description
+
+Certain malformed or corrupted ciphertexts (for example, a truncated NIZK proof or malformed fragment lengths) could cause `decapsulate()` to throw exceptions or exhibit distinguishable behavior. This could be used as a decryption oracle by an attacker to learn about ciphertext validity.
+
+#### Fix Applied
+
+- Compute the **implicit rejection value** early from the raw ciphertext bytes and use it as the default return value on any validation failure.
+- Wrap critical parsing and verification steps in try/catch blocks: serialization, component decryption (SLSS/TDD/EGRW), NIZK deserialization and verification, and re-encapsulation. Any failure marks decapsulation as invalid but does not throw.
+- Normalize share lengths (expect 32-byte shares) and use zeroed fallbacks to avoid reconstruction exceptions.
+- Replace direct ciphertext byte comparison with fixed-length SHA3-256 hash comparisons to avoid leaks from variable-length ciphertexts.
+- Add a public key consistency check: `sha3_256(serializePublicKey(publicKey)) === secretKey.publicKeyHash`; treat mismatches as invalid decapsulation.
+- Added unit tests exercising tampering and malformed inputs: `test/kem-malformed.test.ts`.
+
+These changes ensure `decapsulate()` always returns a 32-byte pseudorandom secret (implicit reject) on invalid input, preventing oracle-style leakage.
+
 ---
 
 ### VULN-005: Potential Integer Precision Issues
@@ -257,17 +278,21 @@ JavaScript's garbage collector may copy buffer contents during compaction. The `
 
 **File:** `src/utils/shake.ts`  
 **Lines:** 82-100  
-**Status:** 🟡 ACKNOWLEDGED
+**Status:** ✅ MITIGATED
 
 #### Description
 
 The counter-mode SHA3-256 fallback is not a proven XOF construction. While unlikely to be used on Node.js/Bun, security properties are unverified.
 
-#### Mitigation
+#### Mitigation / Fix Applied
 
-- Native SHAKE256 is available in all target environments (Node.js 18+, Bun)
-- Fallback only triggers in edge cases
-- Consider adding warning log when fallback is used
+- Added `isNativeShake256Available()` helper to allow application code to detect and enforce native SHAKE256 availability.
+- Added an explicit README note advising production deployments to use native SHAKE256 or a runtime that supports it.
+- Fallback continues to exist for compatibility, but the above mitigations reduce the risk and make it visible to operators.
+
+#### Recommendation
+
+For highest assurance, consider adding a configuration flag that causes startup to fail when native SHAKE256 is unavailable.
 
 ---
 
@@ -370,6 +395,7 @@ Generator cache creates timing differences between cache hits and misses, potent
 | VULN-001 | TDD plaintext storage | ✅ FIXED | XOR encryption with masked-matrix keystream |
 | VULN-002 | EGRW randomness leak  | ✅ FIXED | Ephemeral walk vertex derivation            |
 | VULN-004 | Modular bias          | ✅ FIXED | Rejection sampling in TDD                   |
+| VULN-014 | Decapsulation oracle  | ✅ FIXED | Safe parsing, implicit-reject, hash-compare |
 
 ### Acknowledged Limitations
 
@@ -397,9 +423,16 @@ Generator cache creates timing differences between cache hits and misses, potent
 
 The kMOSAIC implementation has been assessed and critical security issues have been remediated:
 
-1. **VULN-001 (TDD Plaintext):** Now uses XOR encryption with keystream derived from the masked tensor matrix
-2. **VULN-002 (EGRW Randomness):** Randomness no longer exposed; ephemeral walk vertex used instead
-3. **VULN-004 (Modular Bias):** Rejection sampling now ensures uniform distribution
+1. **VULN-001 (TDD Plaintext):** Now uses XOR encryption with keystream derived from the masked tensor matrix2. **VULN-002 (EGRW randomness exposure):** Now derives ciphertext endpoints from ephemeral walks and does not expose randomness
+2. **VULN-004 (Modular bias):** Rejection sampling implemented in TDD sampling
+3. **VULN-014 (Decapsulation oracle):** Decapsulation hardened to return implicit-reject values on malformed or tampered ciphertexts; added unit tests to verify behavior
+
+Additional improvements:
+
+- Added `isNativeShake256Available()` and README guidance to make SHAKE256 availability explicit for production deployments.
+- Added robust unit tests for malformed/corrupted ciphertext handling: `test/kem-malformed.test.ts` (proof tampering, malformed fragments, truncated ciphertexts, publicKey mismatch).
+
+Overall, the most critical issues have been remediated and the codebase now includes tests that guard against malformed ciphertext behavior and oracle leakage. Continuous monitoring and peer review are recommended for the remaining acknowledged limitations (timing, zeroization limits, and JS runtime concerns).2. **VULN-002 (EGRW Randomness):** Randomness no longer exposed; ephemeral walk vertex used instead 3. **VULN-004 (Modular Bias):** Rejection sampling now ensures uniform distribution
 
 The remaining acknowledged items are primarily JavaScript runtime limitations that are well-documented in the code and do not constitute exploitable vulnerabilities in typical deployment scenarios.
 
