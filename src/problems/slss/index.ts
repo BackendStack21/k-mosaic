@@ -678,12 +678,16 @@ export function slssDeserializePublicKey(data: Uint8Array): SLSSPublicKey {
   let offset = 0
   const aLen = view.getUint32(offset, true)
   offset += 4
-  const A = new Int32Array(data.buffer, data.byteOffset + offset, aLen / 4)
+  // Copy to a new buffer to ensure proper ownership and alignment
+  const aBytes = data.slice(offset, offset + aLen)
+  const A = new Int32Array(aBytes.buffer, aBytes.byteOffset, aLen / 4)
   offset += aLen
 
   const tLen = view.getUint32(offset, true)
   offset += 4
-  const t = new Int32Array(data.buffer, data.byteOffset + offset, tLen / 4)
+  // Copy to a new buffer to ensure proper ownership and alignment
+  const tBytes = data.slice(offset, offset + tLen)
+  const t = new Int32Array(tBytes.buffer, tBytes.byteOffset, tLen / 4)
 
   return { A, t }
 }
