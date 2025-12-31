@@ -38,7 +38,7 @@ program
   .description('CLI for kMOSAIC post-quantum cryptographic library')
   .version(CLI_VERSION)
 
-// Version command (for compatibility with Go CLI)
+// Version command
 program
   .command('version')
   .description('Show version information')
@@ -145,6 +145,16 @@ function customDeserializePublicKey(data: Uint8Array): MOSAICPublicKey {
 }
 
 function secretKeyFromObject(obj: any): MOSAICSecretKey {
+  // Go stores seed and publicKeyHash as base64 strings
+  const seed =
+    typeof obj.seed === 'string'
+      ? new Uint8Array(Buffer.from(obj.seed, 'base64'))
+      : new Uint8Array(obj.seed)
+  const publicKeyHash =
+    typeof obj.publicKeyHash === 'string'
+      ? new Uint8Array(Buffer.from(obj.publicKeyHash, 'base64'))
+      : new Uint8Array(obj.publicKeyHash)
+
   return {
     slss: { s: new Int8Array(obj.slss.s) },
     tdd: {
@@ -155,8 +165,8 @@ function secretKeyFromObject(obj: any): MOSAICSecretKey {
       },
     },
     egrw: { walk: obj.egrw.walk },
-    seed: new Uint8Array(obj.seed),
-    publicKeyHash: new Uint8Array(obj.publicKeyHash),
+    seed,
+    publicKeyHash,
   }
 }
 // #endregion
