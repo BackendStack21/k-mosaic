@@ -313,11 +313,27 @@ export async function verify(
  * @returns Serialized bytes
  */
 export function serializeSignature(sig: MOSAICSignature): Uint8Array {
-  const result = new Uint8Array(32 + 32 + 64)
+  // Format: [len:4][commitment][len:4][challenge][len:4][response]
+  const result = new Uint8Array(12 + 32 + 32 + 64)
+  const view = new DataView(result.buffer)
+  let offset = 0
 
-  result.set(sig.commitment, 0)
-  result.set(sig.challenge, 32)
-  result.set(sig.response, 64)
+  // Commitment
+  view.setUint32(offset, sig.commitment.length, true)
+  offset += 4
+  result.set(sig.commitment, offset)
+  offset += sig.commitment.length
+
+  // Challenge
+  view.setUint32(offset, sig.challenge.length, true)
+  offset += 4
+  result.set(sig.challenge, offset)
+  offset += sig.challenge.length
+
+  // Response
+  view.setUint32(offset, sig.response.length, true)
+  offset += 4
+  result.set(sig.response, offset)
 
   return result
 }
@@ -325,19 +341,33 @@ export function serializeSignature(sig: MOSAICSignature): Uint8Array {
 /**
  * Deserialize signature from bytes
  *
- * @param data - Serialized signature bytes (128 bytes)
+ * Format: [len:4][commitment][len:4][challenge][len:4][response]
+ *
+ * @param data - Serialized signature bytes
  * @returns Deserialized signature object
  */
 export function deserializeSignature(data: Uint8Array): MOSAICSignature {
-  if (data.length < 128) {
-    throw new Error('Invalid signature data: expected at least 128 bytes')
-  }
+  const view = new DataView(data.buffer, data.byteOffset)
+  let offset = 0
 
-  return {
-    commitment: data.slice(0, 32),
-    challenge: data.slice(32, 64),
-    response: data.slice(64, 128),
-  }
+  // Commitment
+  const commitmentLen = view.getUint32(offset, true)
+  offset += 4
+  const commitment = data.slice(offset, offset + commitmentLen)
+  offset += commitmentLen
+
+  // Challenge
+  const challengeLen = view.getUint32(offset, true)
+  offset += 4
+  const challenge = data.slice(offset, offset + challengeLen)
+  offset += challengeLen
+
+  // Response
+  const responseLen = view.getUint32(offset, true)
+  offset += 4
+  const response = data.slice(offset, offset + responseLen)
+
+  return { commitment, challenge, response }
 }
 
 /**
@@ -351,29 +381,46 @@ export function serializePublicKey(pk: MOSAICPublicKey): Uint8Array {
   const tddBytes = tddSerializePublicKey(pk.tdd)
   const egrwBytes = egrwSerializePublicKey(pk.egrw)
 
+  // Serialize security level as string
+  const levelBytes = new TextEncoder().encode(pk.params.level)
+
   const totalLen =
-    4 + slssBytes.length + 4 + tddBytes.length + 4 + egrwBytes.length + pk.binding.length
+    4 + levelBytes.length +
+    4 + slssBytes.length +
+    4 + tddBytes.length +
+    4 + egrwBytes.length +
+    32 // binding is fixed 32 bytes
 
   const result = new Uint8Array(totalLen)
   const view = new DataView(result.buffer)
 
   let offset = 0
 
+  // Security level string
+  view.setUint32(offset, levelBytes.length, true)
+  offset += 4
+  result.set(levelBytes, offset)
+  offset += levelBytes.length
+
+  // SLSS component
   view.setUint32(offset, slssBytes.length, true)
   offset += 4
   result.set(slssBytes, offset)
   offset += slssBytes.length
 
+  // TDD component
   view.setUint32(offset, tddBytes.length, true)
   offset += 4
   result.set(tddBytes, offset)
   offset += tddBytes.length
 
+  // EGRW component
   view.setUint32(offset, egrwBytes.length, true)
   offset += 4
   result.set(egrwBytes, offset)
   offset += egrwBytes.length
 
+  // Binding (fixed 32 bytes, no length prefix)
   result.set(pk.binding, offset)
 
   return result
