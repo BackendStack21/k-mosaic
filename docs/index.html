@@ -1,0 +1,953 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>kMOSAIC | Post-Quantum Cryptography</title>
+    <meta
+      name="description"
+      content="Multi-Oracle Structured Algebraic Intractability Composition - Post-Quantum Cryptography for Go and Node.js"
+    />
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- SEO & Social -->
+    <meta
+      name="keywords"
+      content="post-quantum cryptography, kMOSAIC, lattice cryptography, tensor decomposition, expander graphs, go, node.js, security, encryption, KEM, digital signatures"
+    />
+    <meta name="author" content="21no.de" />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://github.com/BackendStack21/k-mosaic"
+    />
+    <meta property="og:title" content="kMOSAIC | Post-Quantum Cryptography" />
+    <meta
+      property="og:description"
+      content="Multi-Oracle Structured Algebraic Intractability Composition. The next generation of post-quantum cryptography for Go and Node.js."
+    />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta
+      property="twitter:url"
+      content="https://github.com/BackendStack21/k-mosaic"
+    />
+    <meta
+      property="twitter:title"
+      content="kMOSAIC | Post-Quantum Cryptography"
+    />
+    <meta
+      property="twitter:description"
+      content="Multi-Oracle Structured Algebraic Intractability Composition. The next generation of post-quantum cryptography for Go and Node.js."
+    />
+
+    <!-- JSON-LD for AI Agents -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareSourceCode",
+        "name": "kMOSAIC",
+        "programmingLanguage": ["Go", "TypeScript", "JavaScript"],
+        "description": "A post-quantum cryptographic library combining Sparse Lattice Subset Sum, Tensor Decomposition, and Expander Graph Random Walk problems.",
+        "codeRepository": "https://github.com/BackendStack21/k-mosaic",
+        "license": "https://opensource.org/licenses/MIT",
+        "author": {
+          "@type": "Organization",
+          "name": "21no.de",
+          "url": "https://21no.de"
+        },
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --primary: #6366f1;
+        --primary-dark: #4f46e5;
+        --secondary: #ec4899;
+        --accent: #8b5cf6;
+        --bg: #0f172a;
+        --bg-card: #1e293b;
+        --text: #f8fafc;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --code-bg: #020617;
+        --success: #10b981;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: 'Outfit', sans-serif;
+        line-height: 1.6;
+        color: var(--text);
+        background: var(--bg);
+        margin: 0;
+        padding: 0;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 2rem;
+      }
+
+      /* Hero Section */
+      .hero {
+        position: relative;
+        padding: 8rem 0 6rem;
+        text-align: center;
+        overflow: hidden;
+        background: radial-gradient(
+          circle at top center,
+          rgba(99, 102, 241, 0.15) 0%,
+          transparent 70%
+        );
+      }
+
+      .hero h1 {
+        font-size: 4rem;
+        font-weight: 800;
+        margin: 0;
+        line-height: 1.1;
+        background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.02em;
+      }
+
+      .hero .subtitle {
+        font-size: 1.5rem;
+        color: var(--text-muted);
+        margin-top: 1.5rem;
+        max-width: 700px;
+        margin-left: auto;
+        margin-right: auto;
+      }
+
+      .hero-badges {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        margin-top: 2rem;
+        flex-wrap: wrap;
+      }
+
+      .badge {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--border);
+        padding: 0.5rem 1rem;
+        border-radius: 999px;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .badge.highlight {
+        border-color: var(--primary);
+        color: var(--primary);
+        background: rgba(99, 102, 241, 0.1);
+      }
+
+      .cta-buttons {
+        margin-top: 3rem;
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.875rem 2rem;
+        border-radius: 8px;
+        font-weight: 600;
+        text-decoration: none;
+        transition: all 0.2s;
+        font-size: 1.1rem;
+      }
+
+      .btn-primary {
+        background: linear-gradient(
+          135deg,
+          var(--primary) 0%,
+          var(--accent) 100%
+        );
+        color: white;
+        box-shadow: 0 4px 14px 0 rgba(99, 102, 241, 0.39);
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(99, 102, 241, 0.23);
+      }
+
+      .btn-secondary {
+        background: var(--bg-card);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+
+      .btn-secondary:hover {
+        border-color: var(--text-muted);
+        background: rgba(255, 255, 255, 0.05);
+      }
+
+      /* Features Grid */
+      .features {
+        padding: 4rem 0;
+      }
+
+      .grid-3 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 2rem;
+      }
+
+      .feature-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 2rem;
+        transition: transform 0.2s;
+      }
+
+      .feature-card:hover {
+        transform: translateY(-5px);
+        border-color: var(--primary);
+      }
+
+      .feature-icon {
+        font-size: 2rem;
+        margin-bottom: 1rem;
+        display: inline-block;
+        padding: 1rem;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 12px;
+      }
+
+      .feature-card h3 {
+        margin: 0 0 1rem 0;
+        font-size: 1.25rem;
+      }
+
+      .feature-card p {
+        color: var(--text-muted);
+        margin: 0;
+      }
+
+      /* Getting Started Section */
+      .getting-started {
+        padding: 4rem 0;
+        background: rgba(0, 0, 0, 0.2);
+      }
+
+      .section-header {
+        text-align: center;
+        margin-bottom: 3rem;
+      }
+
+      .section-header h2 {
+        font-size: 2.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .tabs {
+        display: flex;
+        justify-content: center;
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+
+      .tab-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        padding: 0.75rem 1.5rem;
+        font-size: 1.1rem;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        transition: all 0.2s;
+      }
+
+      .tab-btn.active {
+        color: var(--primary);
+        border-bottom-color: var(--primary);
+      }
+
+      .tab-content {
+        display: none;
+        animation: fadeIn 0.3s ease;
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .code-block {
+        background: var(--code-bg);
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        overflow: hidden;
+      }
+
+      .code-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1.5rem;
+        background: rgba(255, 255, 255, 0.03);
+        border-bottom: 1px solid var(--border);
+      }
+
+      .lang-badge {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        font-family: monospace;
+      }
+
+      pre {
+        margin: 0;
+        padding: 1.5rem;
+        overflow-x: auto;
+        font-family:
+          'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+        font-size: 0.9rem;
+        line-height: 1.7;
+      }
+
+      /* Syntax Highlighting */
+      .keyword {
+        color: #c678dd;
+      }
+      .function {
+        color: #61afef;
+      }
+      .string {
+        color: #98c379;
+      }
+      .comment {
+        color: #5c6370;
+        font-style: italic;
+      }
+      .type {
+        color: #e5c07b;
+      }
+      .number {
+        color: #d19a66;
+      }
+
+      /* Performance Section */
+      .performance {
+        padding: 4rem 0;
+      }
+
+      .perf-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: var(--bg-card);
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+      }
+
+      .perf-table th,
+      .perf-table td {
+        padding: 1rem 1.5rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .perf-table th {
+        background: rgba(255, 255, 255, 0.05);
+        font-weight: 600;
+        color: var(--text);
+      }
+
+      .perf-table tr:last-child td {
+        border-bottom: none;
+      }
+
+      .perf-table tr:hover td {
+        background: rgba(255, 255, 255, 0.02);
+      }
+
+      .speed-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        background: rgba(16, 185, 129, 0.1);
+        color: var(--success);
+        margin-left: 0.5rem;
+      }
+
+      /* CLI Section */
+      .cli-section {
+        padding: 4rem 0;
+        background: linear-gradient(to bottom, var(--bg), var(--bg-card));
+      }
+
+      .terminal-window {
+        background: #1e1e1e;
+        border-radius: 8px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+        font-family: 'SFMono-Regular', Consolas, monospace;
+        max-width: 800px;
+        margin: 0 auto;
+      }
+
+      .terminal-header {
+        background: #2d2d2d;
+        padding: 0.5rem 1rem;
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+
+      .dot.red {
+        background: #ff5f56;
+      }
+      .dot.yellow {
+        background: #ffbd2e;
+      }
+      .dot.green {
+        background: #27c93f;
+      }
+
+      .terminal-body {
+        padding: 1.5rem;
+        color: #fff;
+      }
+
+      .prompt {
+        color: #10b981;
+      }
+      .cmd {
+        color: #fff;
+      }
+      .output {
+        color: #a0a0a0;
+        margin-bottom: 1rem;
+        display: block;
+      }
+
+      /* Footer */
+      footer {
+        padding: 4rem 0;
+        text-align: center;
+        color: var(--text-muted);
+        border-top: 1px solid var(--border);
+        background: var(--bg-card);
+      }
+
+      @media (max-width: 768px) {
+        .hero h1 {
+          font-size: 2.5rem;
+        }
+        .grid-3 {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="container">
+        <div class="hero-badges">
+          <span class="badge highlight">✨ New: Go Implementation</span>
+          <span class="badge">Post-Quantum Secure</span>
+          <span class="badge">Defense-in-Depth</span>
+        </div>
+        <h1>kMOSAIC</h1>
+        <p class="subtitle">
+          Multi-Oracle Structured Algebraic Intractability Composition.<br />
+          The next generation of post-quantum cryptography, combining Lattices,
+          Tensors, and Graphs.
+        </p>
+        <div class="cta-buttons">
+          <a href="#getting-started" class="btn btn-primary">Get Started</a>
+          <a
+            href="https://github.com/BackendStack21/k-mosaic-go"
+            class="btn btn-secondary"
+            >View on GitHub</a
+          >
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Grid -->
+    <section class="features">
+      <div class="container">
+        <div class="grid-3">
+          <div class="feature-card">
+            <div class="feature-icon">🛡️</div>
+            <h3>Triple Hardness</h3>
+            <p>
+              Combines Sparse Lattice Subset Sum, Tensor Decomposition, and
+              Expander Graph Random Walk problems for unmatched security.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">
+              <img
+                src="https://go.dev/images/favicon-gopher.svg"
+                alt="Go Gopher"
+                style="height: 1em; vertical-align: middle"
+              />
+            </div>
+            <h3>High Performance</h3>
+            <p>
+              Optimized Go implementation for blazing fast key generation,
+              encapsulation, and signing operations.
+            </p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">
+              <img
+                src="https://nodejs.org/static/logos/jsIconGreen.svg"
+                alt="Node.js Logo"
+                style="height: 0.8em; vertical-align: middle"
+              />
+              <img
+                src="https://bun.sh/logo.svg"
+                alt="Bun Logo"
+                style="height: 0.8em; vertical-align: middle"
+              />
+            </div>
+            <h3>Cross-Platform</h3>
+            <p>
+              Available as a high-performance Go module and a flexible
+              Node.js/Bun library for web integration.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Documentation Section -->
+    <section
+      class="documentation"
+      style="padding: 4rem 0; background: var(--bg-card)"
+    >
+      <div class="container">
+        <div class="section-header">
+          <h2>Documentation</h2>
+          <p class="subtitle">
+            In-depth resources to understand the mathematics and implementation.
+          </p>
+        </div>
+        <div class="grid-3">
+          <a
+            href="https://github.com/BackendStack21/k-mosaic/blob/main/kMOSAIC_WHITE_PAPER.md"
+            class="feature-card doc-card"
+            style="text-decoration: none; color: inherit; display: block"
+          >
+            <div class="feature-icon">📄</div>
+            <h3>White Paper</h3>
+            <p>
+              Read the technical specification and cryptographic design behind
+              kMOSAIC.
+            </p>
+          </a>
+          <a
+            href="https://github.com/BackendStack21/k-mosaic/blob/main/DEVELOPER_GUIDE.md"
+            class="feature-card doc-card"
+            style="text-decoration: none; color: inherit; display: block"
+          >
+            <div class="feature-icon">📘</div>
+            <h3>Developer Guide</h3>
+            <p>
+              A complete guide to using kMOSAIC, from basic concepts to advanced
+              integration.
+            </p>
+          </a>
+          <a
+            href="https://github.com/BackendStack21/k-mosaic-go"
+            class="feature-card doc-card"
+            style="text-decoration: none; color: inherit; display: block"
+          >
+            <div class="feature-icon">
+              <img
+                src="https://go.dev/images/favicon-gopher.svg"
+                alt="Go Gopher"
+                style="height: 1em; vertical-align: middle"
+              />
+            </div>
+            <h3>Go Reference</h3>
+            <p>
+              Explore the high-performance Go implementation and API
+              documentation.
+            </p>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Getting Started -->
+    <section id="getting-started" class="getting-started">
+      <div class="container">
+        <div class="section-header">
+          <h2>Getting Started</h2>
+          <p class="subtitle">Choose your preferred language to begin.</p>
+        </div>
+
+        <div class="tabs">
+          <button class="tab-btn active" onclick="switchTab('go')">
+            <img
+              src="https://go.dev/images/favicon-gopher.svg"
+              alt="Go Gopher"
+              style="height: 1em; vertical-align: middle"
+            />
+            Go
+          </button>
+          <button class="tab-btn" onclick="switchTab('node')">
+            <img
+              src="https://nodejs.org/static/logos/jsIconGreen.svg"
+              alt="Node.js Logo"
+              style="height: 1em; vertical-align: middle"
+            />
+            /
+            <img
+              src="https://bun.sh/logo.svg"
+              alt="Bun Logo"
+              style="height: 1em; vertical-align: middle"
+            />
+            Node.js / Bun
+          </button>
+        </div>
+
+        <!-- Go Content -->
+        <div id="go-content" class="tab-content active">
+          <div class="code-block">
+            <div class="code-header">
+              <span class="lang-badge">main.go</span>
+              <span class="lang-badge"
+                >go get github.com/BackendStack21/k-mosaic-go</span
+              >
+            </div>
+            <pre><code><span class="keyword">package</span> main
+
+<span class="keyword">import</span> (
+    <span class="string">"fmt"</span>
+    <span class="string">"log"</span>
+    <span class="string">"github.com/BackendStack21/k-mosaic-go"</span>
+    <span class="string">"github.com/BackendStack21/k-mosaic-go/kem"</span>
+)
+
+<span class="keyword">func</span> <span class="function">main</span>() {
+    <span class="comment">// 1. Generate Key Pair (MOS_128)</span>
+    kp, err := kem.<span class="function">GenerateKeyPair</span>(kmosaic.MOS_128)
+    <span class="keyword">if</span> err != nil {
+        log.<span class="function">Fatal</span>(err)
+    }
+
+    <span class="comment">// 2. Encapsulate (Sender)</span>
+    result, _ := kem.<span class="function">Encapsulate</span>(&kp.PublicKey)
+    fmt.<span class="function">Printf</span>(<span class="string">"Shared Secret: %x\n"</span>, result.SharedSecret[:16])
+
+    <span class="comment">// 3. Decapsulate (Receiver)</span>
+    secret, _ := kem.<span class="function">Decapsulate</span>(&kp.SecretKey, &kp.PublicKey, &result.Ciphertext)
+    fmt.<span class="function">Printf</span>(<span class="string">"Recovered:     %x\n"</span>, secret[:16])
+}</code></pre>
+          </div>
+        </div>
+
+        <!-- Node Content -->
+        <div id="node-content" class="tab-content">
+          <div class="code-block">
+            <div class="code-header">
+              <span class="lang-badge">index.ts</span>
+              <span class="lang-badge">npm install k-mosaic</span>
+            </div>
+            <pre><code><span class="keyword">import</span> { 
+  kemGenerateKeyPair, 
+  encapsulate, 
+  decapsulate, 
+  SecurityLevel 
+} <span class="keyword">from</span> <span class="string">'k-mosaic'</span>;
+
+<span class="keyword">async</span> <span class="keyword">function</span> <span class="function">main</span>() {
+  <span class="comment">// 1. Generate Key Pair</span>
+  <span class="keyword">const</span> { publicKey, secretKey } = <span class="keyword">await</span> <span class="function">kemGenerateKeyPair</span>(SecurityLevel.MOS_128);
+
+  <span class="comment">// 2. Encapsulate (Sender)</span>
+  <span class="keyword">const</span> { ciphertext, sharedSecret } = <span class="keyword">await</span> <span class="function">encapsulate</span>(publicKey);
+  console.<span class="function">log</span>(<span class="string">'Shared Secret:'</span>, sharedSecret);
+
+  <span class="comment">// 3. Decapsulate (Receiver)</span>
+  <span class="keyword">const</span> recovered = <span class="keyword">await</span> <span class="function">decapsulate</span>(ciphertext, secretKey, publicKey);
+  console.<span class="function">log</span>(<span class="string">'Recovered:'</span>, recovered);
+}
+
+<span class="function">main</span>();</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Performance Comparison -->
+    <section class="performance">
+      <div class="container">
+        <div class="section-header">
+          <h2>Performance Benchmarks</h2>
+          <p class="subtitle">
+            Comparison of core operations (MOS-128 Security Level)
+          </p>
+        </div>
+
+        <div style="overflow-x: auto">
+          <table class="perf-table">
+            <thead>
+              <tr>
+                <th>Operation</th>
+                <th>
+                  <img
+                    src="https://go.dev/images/favicon-gopher.svg"
+                    alt="Go Gopher"
+                    style="height: 1em; vertical-align: middle"
+                  />
+                  Implementation <span class="speed-badge">FASTEST</span>
+                </th>
+                <th>
+                  <img
+                    src="https://nodejs.org/static/logos/jsIconGreen.svg"
+                    alt="Node.js Logo"
+                    style="height: 1em; vertical-align: middle"
+                  />
+                  Node.js Implementation
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>KEM Key Generation</strong></td>
+                <td>6.29 ms</td>
+                <td>19.70 ms</td>
+              </tr>
+              <tr>
+                <td><strong>KEM Encapsulate</strong></td>
+                <td>0.32 ms</td>
+                <td>0.52 ms</td>
+              </tr>
+              <tr>
+                <td><strong>KEM Decapsulate</strong></td>
+                <td>0.38 ms</td>
+                <td>6.32 ms</td>
+              </tr>
+              <tr>
+                <td><strong>Sign Key Generation</strong></td>
+                <td>6.22 ms</td>
+                <td>19.63 ms</td>
+              </tr>
+              <tr>
+                <td><strong>Sign Message</strong></td>
+                <td>0.012 ms</td>
+                <td>0.038 ms</td>
+              </tr>
+              <tr>
+                <td><strong>Verify Signature</strong></td>
+                <td>2.44 ms</td>
+                <td>1.45 ms</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p
+          style="
+            text-align: center;
+            margin-top: 1rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+          "
+        >
+          * Benchmarks run on Apple M2 Pro. Go implementation is recommended for
+          high-performance applications.
+        </p>
+      </div>
+    </section>
+
+    <!-- CLI Section -->
+    <section class="cli-section">
+      <div class="container">
+        <div class="section-header">
+          <h2>Powerful CLI</h2>
+          <p class="subtitle">
+            Manage keys and operations directly from your terminal using the
+            Go-based CLI.
+          </p>
+        </div>
+
+        <div class="terminal-window">
+          <div class="terminal-header">
+            <div class="dot red"></div>
+            <div class="dot yellow"></div>
+            <div class="dot green"></div>
+          </div>
+          <div class="terminal-body">
+            <span class="prompt">➜</span>
+            <span class="cmd"
+              >go install
+              github.com/BackendStack21/k-mosaic-go/cmd/k-mosaic-cli@latest</span
+            ><br /><br />
+
+            <span class="prompt">➜</span>
+            <span class="cmd">k-mosaic-cli kem keygen -l 128 -o keys.json</span
+            ><br />
+            <span class="output"
+              >Generated MOS-128 key pair in 6.5ms. Saved to keys.json</span
+            >
+
+            <span class="prompt">➜</span>
+            <span class="cmd"
+              >k-mosaic-cli kem encrypt -pk keys.json -m "Top Secret" -o
+              enc.json</span
+            ><br />
+            <span class="output"
+              >Message encrypted. Ciphertext saved to enc.json</span
+            >
+
+            <span class="prompt">➜</span>
+            <span class="cmd"
+              >k-mosaic-cli sign sign -sk keys.json -pk keys.json -i
+              contract.pdf -o sig.json</span
+            ><br />
+            <span class="output"
+              >File signed successfully. Signature saved to sig.json</span
+            >
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="container">
+        <div
+          class="footer-links"
+          style="
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            flex-wrap: wrap;
+          "
+        >
+          <a
+            href="https://github.com/BackendStack21/k-mosaic-go"
+            style="
+              color: var(--text-muted);
+              text-decoration: none;
+              transition: color 0.2s;
+            "
+            onmouseover="this.style.color = 'var(--primary)'"
+            onmouseout="this.style.color = 'var(--text-muted)'"
+            >Go Repository</a
+          >
+          <a
+            href="https://github.com/BackendStack21/k-mosaic"
+            style="
+              color: var(--text-muted);
+              text-decoration: none;
+              transition: color 0.2s;
+            "
+            onmouseover="this.style.color = 'var(--primary)'"
+            onmouseout="this.style.color = 'var(--text-muted)'"
+            >Node.js Repository</a
+          >
+          <a
+            href="https://github.com/BackendStack21/k-mosaic/blob/main/kMOSAIC_WHITE_PAPER.md"
+            style="
+              color: var(--text-muted);
+              text-decoration: none;
+              transition: color 0.2s;
+            "
+            onmouseover="this.style.color = 'var(--primary)'"
+            onmouseout="this.style.color = 'var(--text-muted)'"
+            >White Paper</a
+          >
+          <a
+            href="https://github.com/BackendStack21/k-mosaic/blob/main/DEVELOPER_GUIDE.md"
+            style="
+              color: var(--text-muted);
+              text-decoration: none;
+              transition: color 0.2s;
+            "
+            onmouseover="this.style.color = 'var(--primary)'"
+            onmouseout="this.style.color = 'var(--text-muted)'"
+            >Developer Guide</a
+          >
+        </div>
+        <p>
+          &copy; 2026
+          <a
+            href="https://21no.de"
+            style="
+              color: inherit;
+              text-decoration: none;
+              border-bottom: 1px dotted var(--text-muted);
+            "
+            >21no.de</a
+          >. Licensed under MIT.
+        </p>
+        <p style="font-size: 0.9rem; opacity: 0.7">
+          <strong>Disclaimer:</strong> kMOSAIC is an experimental cryptographic
+          construction. Do not use for sensitive data without further review.
+        </p>
+      </div>
+    </footer>
+
+    <script>
+      function switchTab(lang) {
+        // Update buttons
+        document
+          .querySelectorAll('.tab-btn')
+          .forEach((btn) => btn.classList.remove('active'))
+        event.target.classList.add('active')
+
+        // Update content
+        document
+          .querySelectorAll('.tab-content')
+          .forEach((content) => content.classList.remove('active'))
+        document.getElementById(lang + '-content').classList.add('active')
+      }
+    </script>
+  </body>
+</html>
