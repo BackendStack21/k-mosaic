@@ -283,6 +283,18 @@ describe('serializeSignature/deserializeSignature', () => {
 
     expect(constantTimeEqual(serialized1, serialized2)).toBe(false)
   })
+
+  test('deserializeSignature rejects trailing bytes', async () => {
+    const keyPair = await generateKeyPair('MOS-128')
+    const message = new TextEncoder().encode('Test message')
+    const signature = await sign(message, keyPair.secretKey, keyPair.publicKey)
+    const serialized = serializeSignature(signature)
+    const withTrailing = new Uint8Array(serialized.length + 1)
+    withTrailing.set(serialized)
+    withTrailing[withTrailing.length - 1] = 0x01
+
+    expect(() => deserializeSignature(withTrailing)).toThrow('trailing bytes')
+  })
 })
 
 // =============================================================================

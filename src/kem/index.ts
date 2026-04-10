@@ -951,6 +951,7 @@ export function serializePublicKey(pk: MOSAICPublicKey): Uint8Array {
 export function deserializePublicKey(data: Uint8Array): MOSAICPublicKey {
   // Basic bounds check
   if (data.length < 4) throw new Error('Invalid public key: too short')
+  const MAX_PART = 8 * 1024 * 1024 // 8 MB per component
 
   const view = new DataView(data.buffer, data.byteOffset)
   let offset = 0
@@ -975,7 +976,7 @@ export function deserializePublicKey(data: Uint8Array): MOSAICPublicKey {
     throw new Error('Invalid public key: truncated SLSS length')
   const slssLen = view.getUint32(offset, true)
   offset += 4
-  if (slssLen <= 0 || offset + slssLen > data.length)
+  if (slssLen <= 0 || slssLen > MAX_PART || offset + slssLen > data.length)
     throw new Error('Invalid public key: SLSS component out of bounds')
   const slss = slssDeserializePublicKey(data.slice(offset, offset + slssLen))
   offset += slssLen
@@ -985,7 +986,7 @@ export function deserializePublicKey(data: Uint8Array): MOSAICPublicKey {
     throw new Error('Invalid public key: truncated TDD length')
   const tddLen = view.getUint32(offset, true)
   offset += 4
-  if (tddLen <= 0 || offset + tddLen > data.length)
+  if (tddLen <= 0 || tddLen > MAX_PART || offset + tddLen > data.length)
     throw new Error('Invalid public key: TDD component out of bounds')
   const tdd = tddDeserializePublicKey(data.slice(offset, offset + tddLen))
   offset += tddLen
@@ -995,7 +996,7 @@ export function deserializePublicKey(data: Uint8Array): MOSAICPublicKey {
     throw new Error('Invalid public key: truncated EGRW length')
   const egrwLen = view.getUint32(offset, true)
   offset += 4
-  if (egrwLen <= 0 || offset + egrwLen > data.length)
+  if (egrwLen <= 0 || egrwLen > MAX_PART || offset + egrwLen > data.length)
     throw new Error('Invalid public key: EGRW component out of bounds')
   const egrw = egrwDeserializePublicKey(data.slice(offset, offset + egrwLen))
   offset += egrwLen
@@ -1004,6 +1005,12 @@ export function deserializePublicKey(data: Uint8Array): MOSAICPublicKey {
   if (offset + 32 > data.length)
     throw new Error('Invalid public key: missing binding')
   const binding = data.slice(offset, offset + 32)
+  offset += 32
+
+  // Require canonical exact length to prevent trailing-data malleability
+  if (offset !== data.length) {
+    throw new Error('Invalid public key: trailing bytes')
+  }
 
   return { slss, tdd, egrw, binding, params }
 }

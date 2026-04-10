@@ -376,6 +376,11 @@ export function deserializeSignature(data: Uint8Array): MOSAICSignature {
   if (responseLen <= 0 || offset + responseLen > data.length)
     throw new Error('Invalid signature: malformed response')
   const response = data.slice(offset, offset + responseLen)
+  offset += responseLen
+
+  if (offset !== data.length) {
+    throw new Error('Invalid signature: trailing bytes')
+  }
 
   return { commitment, challenge, response }
 }
