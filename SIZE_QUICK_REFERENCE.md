@@ -5,8 +5,8 @@ Quick lookup table for kMOSAIC cryptographic component sizes.
 ## At a Glance
 
 ```
-MOS-128:  823 KB key  |  5.7 KB ciphertext  |  140 B signature
-MOS-256:  3.3 MB key  | 10.5 KB ciphertext  |  140 B signature
+MOS-128:  823 KB key  |  5.7 KB ciphertext  |  204 B signature
+MOS-256:  3.3 MB key  | 10.5 KB ciphertext  |  204 B signature
 ```
 
 ## Complete Size Table
@@ -18,7 +18,7 @@ MOS-256:  3.3 MB key  | 10.5 KB ciphertext  |  140 B signature
 | **Public Key**   | 823.6 KB | 820-830 KB   | Public key exchange, certificate storage |
 | **Secret Key**   | ~100 KB  | -            | Local storage only                       |
 | **Ciphertext**   | 5.7 KB   | 5.6-6.0 KB   | Encrypted messages, key encapsulation    |
-| **Signature**    | 140 B    | Always 140 B | Digital signatures, authentication       |
+| **Signature**    | 204 B    | Always 204 B | Digital signatures, authentication       |
 | **Binding Hash** | 32 B     | Always 32 B  | Internal (part of public key)            |
 
 ### MOS-256 (256-bit Security)
@@ -28,7 +28,7 @@ MOS-256:  3.3 MB key  | 10.5 KB ciphertext  |  140 B signature
 | **Public Key**   | 3.33 MB | 3.3-3.4 MB   | Public key exchange, certificate storage |
 | **Secret Key**   | ~400 KB | -            | Local storage only                       |
 | **Ciphertext**   | 10.5 KB | 10.0-11.0 KB | Encrypted messages, key encapsulation    |
-| **Signature**    | 140 B   | Always 140 B | Digital signatures, authentication       |
+| **Signature**    | 204 B   | Always 204 B | Digital signatures, authentication       |
 | **Binding Hash** | 32 B    | Always 32 B  | Internal (part of public key)            |
 
 ### Classical Cryptography (Reference)
@@ -37,7 +37,7 @@ MOS-256:  3.3 MB key  | 10.5 KB ciphertext  |  140 B signature
 | ----------------- | ----------- | ---------- | --------- | ----------------------------------- |
 | X25519            | 32 B        | 32 B       | -         | ECDH key exchange                   |
 | Ed25519           | 32 B        | -          | 64 B      | Digital signatures                  |
-| kMOSAIC (MOS-128) | **25,738x** | **178x**   | **2.2x**  | Larger due to post-quantum security |
+| kMOSAIC (MOS-128) | **25,738x** | **178x**   | **3.2x**  | Larger due to post-quantum security |
 
 ## Size Formula
 
@@ -50,8 +50,8 @@ Public Key ≈ (384 × 512 × 4) + 55,000 ≈ 823 KB
 Ciphertext ≈ 1,500 + 1,500 + 2,300 ≈ 5.7 KB
            = SLSS(c1) + TDD(c2) + EGRW(c3) + NIZK proof
 
-Signature = 32 + 32 + 64 + 12 = 140 B
-          = commitment + challenge + response + headers
+Signature = 12 + 32 + 32 + 128 = 204 B
+          = headers + commitment + challenge + response (tBytes 64B + zBytes 64B)
 ```
 
 ### MOS-256
@@ -63,8 +63,8 @@ Public Key ≈ (768 × 1024 × 4) + 186,000 ≈ 3.33 MB
 Ciphertext ≈ 2,500 + 3,500 + 4,500 ≈ 10.5 KB
            = SLSS(c1) + TDD(c2) + EGRW(c3) + NIZK proof
 
-Signature = 32 + 32 + 64 + 12 = 140 B
-          = commitment + challenge + response + headers (same as MOS-128)
+Signature = 12 + 32 + 32 + 128 = 204 B
+          = headers + commitment + challenge + response (same as MOS-128)
 ```
 
 ## Storage Requirements
@@ -101,8 +101,8 @@ Typical packet sizes for different operations:
 
 | Operation        | Size             | Notes                |
 | ---------------- | ---------------- | -------------------- |
-| Sign + Signature | Original + 140 B | Attached to messages |
-| Verify operation | 140 B input      | Constant time        |
+| Sign + Signature | Original + 204 B | Attached to messages |
+| Verify operation | 204 B input      | Constant time        |
 
 ### Encryption
 
@@ -127,25 +127,25 @@ Typical packet sizes for different operations:
 | Scenario            | MOS-128     | MOS-256     | Classical  | Impact |
 | ------------------- | ----------- | ----------- | ---------- | ------ |
 | Sign message        | Negligible  | Negligible  | Negligible | 1x     |
-| Send signed message | Msg + 140 B | Msg + 140 B | Msg + 64 B | +2.2x  |
+| Send signed message | Msg + 204 B | Msg + 204 B | Msg + 64 B | +3.2x  |
 | Verify signature    | Negligible  | Negligible  | Negligible | 1x     |
 
 ## Performance Characteristics
 
 ### Generation Speed
 
-| Operation           | Time     | Security Level |
-| ------------------- | -------- | -------------- |
-| Generate public key | 1-10 ms  | MOS-128        |
-| Generate public key | 10-50 ms | MOS-256        |
-| Generate signature  | 1-5 ms   | Both           |
+| Operation           | Time      | Security Level |
+| ------------------- | --------- | -------------- |
+| Generate public key | ~12.7 ms  | MOS-128        |
+| Generate public key | 10-50 ms  | MOS-256        |
+| Generate signature  | ~0.073 ms | Both           |
 
 ### Validation Speed
 
-| Operation         | Time     | Security Level |
-| ----------------- | -------- | -------------- |
-| Verify signature  | 0.5-2 ms | Both           |
-| Verify ciphertext | 5-20 ms  | Both           |
+| Operation         | Time    | Security Level |
+| ----------------- | ------- | -------------- |
+| Verify signature  | ~1.5 ms | Both           |
+| Verify ciphertext | ~5.6 ms | Both           |
 
 ## Practical Implications
 
@@ -193,6 +193,6 @@ Run `bun test test/validate-sizes.test.ts` to verify actual sizes match expectat
 
 ---
 
-**Last Updated:** December 31, 2025
+**Last Updated:** April 11, 2026
 **Test Coverage:** All components validated
 **Status:** All tests passing ✓
