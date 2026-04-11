@@ -676,39 +676,39 @@ k-mosaic-cli benchmark --level 128 --iterations 20
 
 📊 KEM Key Generation
 ────────────────────────────────────────────────────────
-  kMOSAIC:      19.289 ms/op |     51.8 ops/sec
-  X25519:       0.016 ms/op |  63441.7 ops/sec
-  Comparison: Node.js is 1223.7x faster
+  kMOSAIC:      12.707 ms/op |     78.7 ops/sec
+  X25519:       0.015 ms/op |  67076.7 ops/sec
+  Comparison: Node.js is 852.4x faster
 
 📊 KEM Encapsulation
 ────────────────────────────────────────────────────────
-  kMOSAIC:       0.538 ms/op |   1860.0 ops/sec
-  X25519:       0.043 ms/op |  23529.4 ops/sec
-  Comparison: Node.js is 12.7x faster
+  kMOSAIC:       0.495 ms/op |   2021.6 ops/sec
+  X25519:       0.041 ms/op |  24180.4 ops/sec
+  Comparison: Node.js is 12.0x faster
 
 📊 KEM Decapsulation
 ────────────────────────────────────────────────────────
-  kMOSAIC:       4.220 ms/op |    237.0 ops/sec
-  X25519:       0.030 ms/op |  32811.1 ops/sec
-  Comparison: Node.js is 138.5x faster
+  kMOSAIC:       5.576 ms/op |    179.3 ops/sec
+  X25519:       0.032 ms/op |  31555.7 ops/sec
+  Comparison: Node.js is 176.0x faster
 
 📊 Signature Key Generation
 ────────────────────────────────────────────────────────
-  kMOSAIC:       19.204 ms/op |     52.1 ops/sec
-  Ed25519:       0.012 ms/op |  80971.7 ops/sec
-  Comparison: Node.js is 1555.0x faster
+  kMOSAIC:       12.438 ms/op |     80.4 ops/sec
+  Ed25519:       0.012 ms/op |  86673.9 ops/sec
+  Comparison: Node.js is 1078.0x faster
 
 📊 Signing
 ────────────────────────────────────────────────────────
-  kMOSAIC:        0.040 ms/op |  25049.6 ops/sec
-  Ed25519:       0.011 ms/op |  87190.3 ops/sec
-  Comparison: Node.js is 3.5x faster
+  kMOSAIC:        0.073 ms/op |  13697.4 ops/sec
+  Ed25519:       0.013 ms/op |  79522.9 ops/sec
+  Comparison: Node.js is 5.8x faster
 
 📊 Verification
 ────────────────────────────────────────────────────────
-  kMOSAIC:        1.417 ms/op |    705.9 ops/sec
-  Ed25519:       0.033 ms/op |  30607.6 ops/sec
-  Comparison: Node.js is 43.4x faster
+  kMOSAIC:        1.477 ms/op |    676.8 ops/sec
+  Ed25519:       0.033 ms/op |  30156.8 ops/sec
+  Comparison: Node.js is 44.6x faster
 
 ════════════════════════════════════════════════════════════════════════════
 
@@ -719,7 +719,7 @@ k-mosaic-cli benchmark --level 128 --iterations 20
 ├─────────────────────┼─────────────┼─────────────┤
 │ KEM Public Key      │ ~  7500 B │       44 B │
 │ KEM Ciphertext      │ ~  7800 B │       76 B │
-│ Signature           │ ~  7400 B │       64 B │
+│ Signature           │     204 B │       64 B │
 └─────────────────────┴─────────────┴─────────────┘
 
 💡 NOTES:
