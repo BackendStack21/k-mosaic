@@ -1461,20 +1461,20 @@ kMOSAIC's lattice component (SLSS) uses a variant of the SIS problem for signatu
 4. Public Key: (A, t)
 5. Secret Key: s
 
-**Signing** (simplified):
+**Signing** (sub-SLSS Sigma protocol):
 
-1. Generate random "mask" vector y
-2. Compute commitment w = A × y (mod q)
-3. Hash to get challenge c = H(message, w)
-4. Compute response z = y + c × s
-5. If z is too large, restart (rejection sampling)
-6. Output signature (c, z)
+1. Derive a dedicated signing sub-key `(A', s', t' = A'·s')` deterministically from the master seed
+2. Generate random mask vector r; compute commitment `w = A'·r (mod Q_SIG)`
+3. Hash to get challenge `c = H(serialize(w) || serialize(t') || msgHash || binding)`
+4. Compute response `z = r + c·s'`; output `tBytes = serialize(t')` and `zBytes = serialize(z)`
+5. Output signature: `commitment (32B) || challenge (32B) || tBytes (64B) || zBytes (64B)`
 
 **Verification**:
 
-1. Recompute w' = A × z - c × t (mod q)
-2. Recompute c' = H(message, w')
-3. Accept if c' = c and z is small
+1. Deserialize `tBytes` and `zBytes` from the response field
+2. Recompute `w_check = A'·z - c·t' (mod Q_SIG)`
+3. Recompute `c' = H(serialize(w_check) || tBytes || msgHash || binding)`
+4. Accept if `c' == commitment` (algebraic relation holds)
 
 ### Security of SLSS
 
@@ -3809,8 +3809,8 @@ So 256-bit classical ≈ 128-bit quantum security.
 
 | Operation   | Time (ms) | Ops/sec |
 | :---------- | :-------- | :------ |
-| KEM KeyGen  | 19.289    | 51.8    |
-| Sign KeyGen | 19.204    | 52.1    |
+| KEM KeyGen  | 12.707    | 78.7    |
+| Sign KeyGen | 12.438    | 80.4    |
 
 Key generation is done once and keys are reused.
 
@@ -3818,27 +3818,27 @@ Key generation is done once and keys are reused.
 
 | Operation   | Time (ms) | Ops/sec |
 | :---------- | :-------- | :------ |
-| Encapsulate | 0.538     | 1,860.0 |
-| Decapsulate | 4.220     | 237.0   |
+| Encapsulate | 0.495     | 2,021.6 |
+| Decapsulate | 5.576     | 179.3   |
 
 ### Signature Operations
 
 | Operation | Time (ms) | Ops/sec  |
 | :-------- | :-------- | :------- |
-| Sign      | 0.040     | 25,049.6 |
-| Verify    | 1.417     | 705.9    |
+| Sign      | 0.073     | 13,697.4 |
+| Verify    | 1.477     | 676.8    |
 
-_Benchmarks on Apple M2 Pro, Bun runtime. Tested: December 31, 2025._
+_Benchmarks on Apple M2 Pro, Bun runtime. Tested: April 11, 2026._
 
 ### Key and Signature Sizes
 
 #### MOS-128 (128-bit Security)
 
-| Component      | Size    | Notes                                                                              |
-| :------------- | :------ | :--------------------------------------------------------------------------------- |
-| KEM Public Key | ~824 KB | Contains SLSS matrix A (384 × 512 × 4 bytes), TDD tensor, EGRW keys                |
-| KEM Ciphertext | ~5.7 KB | Contains SLSS vectors (c1), TDD ciphertext (c2), EGRW vertex path (c3), NIZK proof |
-| Signature      | 140 B   | commitment (32B) + challenge (32B) + response (64B) + overhead (12B)               |
+| Component      | Size    | Notes                                                                                       |
+| :------------- | :------ | :------------------------------------------------------------------------------------------ |
+| KEM Public Key | ~824 KB | Contains SLSS matrix A (384 × 512 × 4 bytes), TDD tensor, EGRW keys                         |
+| KEM Ciphertext | ~5.7 KB | Contains SLSS vectors (c1), TDD ciphertext (c2), EGRW vertex path (c3), NIZK proof          |
+| Signature      | 204 B   | commitment (32B) + challenge (32B) + response: tBytes (64B) + zBytes (64B) + overhead (12B) |
 
 #### MOS-256 (256-bit Security)
 
@@ -3846,7 +3846,7 @@ _Benchmarks on Apple M2 Pro, Bun runtime. Tested: December 31, 2025._
 | :------------- | :------- | :-------------------------------------------------------------------------- |
 | KEM Public Key | ~3.3 MB  | Contains SLSS matrix A (768 × 1024 × 4 bytes), larger TDD tensor, EGRW keys |
 | KEM Ciphertext | ~10.5 KB | Larger ciphertexts due to bigger parameter sets                             |
-| Signature      | 140 B    | Same as MOS-128 - signature size is independent of security level           |
+| Signature      | 204 B    | Same as MOS-128 - signature size is independent of security level           |
 
 #### Classical Cryptography (for Reference)
 
@@ -3859,7 +3859,7 @@ _Benchmarks on Apple M2 Pro, Bun runtime. Tested: December 31, 2025._
 **Important Notes:**
 
 - kMOSAIC provides post-quantum security at the cost of **much larger** keys compared to classical algorithms (~100x larger)
-- Signatures are compact (140 bytes) despite the heterogeneous design
+- Signatures are compact (204 bytes) despite the heterogeneous design
 - Public key size dominates the communication footprint due to lattice-based matrix storage
 - See [test/validate-sizes.test.ts](test/validate-sizes.test.ts) for runtime validation of these sizes
 
