@@ -117,9 +117,10 @@ describe('Size Validation Tests', () => {
   Note: Actual size is MUCH smaller than documented (~98% smaller!)
       `)
 
-      // MOS-128 signatures are 140 bytes (not 7.4 KB)
-      // Structure: commitment (32B) + challenge (32B) + response (64B) + overhead (12B)
-      expect(sizeBytes).toBe(140)
+      // MOS-128 signatures are 204 bytes (v2 scheme)
+      // Structure: commitment (32B) + challenge (32B) + response (128B) + overhead (12B)
+      // response = t' (64B, M_SIG Uint16) || z (64B, N_SIG Int16)
+      expect(sizeBytes).toBe(204)
     })
   })
 
@@ -191,12 +192,12 @@ describe('Size Validation Tests', () => {
       console.log(`
   === Signature Size (MOS-256) ===
   Actual size: ${formatBytes(sizeBytes)}
-  Note: MOS-256 signatures are same size as MOS-128 (140 bytes)
+  Note: MOS-256 signatures are same size as MOS-128 (204 bytes, v2 scheme)
   Signature size is independent of security level
       `)
 
-      // Signatures are same size regardless of security level
-      expect(sizeBytes).toBe(140)
+      // Signatures are same size regardless of security level (v2: 204 bytes)
+      expect(sizeBytes).toBe(204)
     })
   })
 
@@ -320,15 +321,10 @@ describe('Size Validation Tests', () => {
   The signature contains:
   - Commitment: 32 bytes (SHA3-256 hash)
   - Challenge: 32 bytes (domain-separated hash)
-  - Response: 64 bytes (SHAKE256-derived)
+  - Response: 128 bytes (tBytes 64B + zBytes 64B, sub-SLSS Sigma protocol)
   - Length prefixes: 12 bytes (4 bytes each for 3 components)
 
-  Total expected: 140 bytes
-
-  However, for MOS-128 (~7.4 KB), the signature likely includes:
-  - The composite response based on all three problems
-  - Additional witness data
-  - Length-prefixed components
+  Total expected: 204 bytes
 
   For implementation details, check:
   - src/sign/index.ts sign() function
@@ -407,7 +403,7 @@ describe('Size Validation Tests', () => {
 │  ────────────────────────────┼────────────────┼───────────────┼──────────  │
 │  KEM Public Key             | ${formatBytes(serializePublicKey(keyPairMOS128.publicKey).length).padEnd(14)} | ~7.5 KB       | ${Math.abs(percentageDiff(serializePublicKey(keyPairMOS128.publicKey).length, 7500)) < 10 ? '✓' : '✗'}        │
 │  KEM Ciphertext             | ${formatBytes(serializeCiphertext(encResultMOS128.ciphertext).length).padEnd(14)} | ~7.8 KB       | ${Math.abs(percentageDiff(serializeCiphertext(encResultMOS128.ciphertext).length, 7800)) < 10 ? '✓' : '✗'}        │
-│  Signature                  | ${formatBytes(serializeSignature(signatureMOS128).length).padEnd(14)} | ~7.4 KB       | ${Math.abs(percentageDiff(serializeSignature(signatureMOS128).length, 7400)) < 10 ? '✓' : '✗'}        │
+│  Signature                  | ${formatBytes(serializeSignature(signatureMOS128).length).padEnd(14)} | 204 B         | ${serializeSignature(signatureMOS128).length === 204 ? '✓' : '✗'}        │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
 
