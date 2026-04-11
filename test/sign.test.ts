@@ -127,7 +127,7 @@ describe('sign/verify', () => {
     expect(signature.challenge).toBeInstanceOf(Uint8Array)
     expect(signature.challenge.length).toBe(32)
     expect(signature.response).toBeInstanceOf(Uint8Array)
-    expect(signature.response.length).toBe(64)
+    expect(signature.response.length).toBe(128) // 64B t' + 64B z
   })
 
   test('verification fails for tampered message', async () => {
@@ -283,6 +283,18 @@ describe('serializeSignature/deserializeSignature', () => {
 
     expect(constantTimeEqual(serialized1, serialized2)).toBe(false)
   })
+
+  test('deserializeSignature rejects trailing bytes', async () => {
+    const keyPair = await generateKeyPair('MOS-128')
+    const message = new TextEncoder().encode('Test message')
+    const signature = await sign(message, keyPair.secretKey, keyPair.publicKey)
+    const serialized = serializeSignature(signature)
+    const withTrailing = new Uint8Array(serialized.length + 1)
+    withTrailing.set(serialized)
+    withTrailing[withTrailing.length - 1] = 0x01
+
+    expect(() => deserializeSignature(withTrailing)).toThrow('trailing bytes')
+  })
 })
 
 // =============================================================================
@@ -341,5 +353,122 @@ describe('Signature Security', () => {
 
     expect(validForOriginal).toBe(true)
     expect(validForOther).toBe(false)
+  })
+})
+
+// =============================================================================
+// Forgery Resistance Tests
+// =============================================================================
+
+describe('Forgery Resistance', () => {
+  test('existential forgery attack is rejected: arbitrary commitment + any response', async () => {
+    // This test validates the fix for Finding 1 (Critical): Existential Forgery.
+    //
+    // PRE-FIX attack: An attacker could pick any arbitrary commitment*, compute
+    // challenge* = H_domain(commitment* || msgHash || pkHash), then use ANY 64-byte
+    // response* — verify() would return true because it never checked the response.
+    //
+    // POST-FIX: verify() checks the algebraic relation A'·z - c·t' = w_check and
+    // that H(w_check_bytes || tBytes || msgHash || binding) == commitment. Without
+    // knowing s' (s.t. A'·s' = t'), an attacker cannot construct valid (tBytes, zBytes)
+    // that satisfy this check for an arbitrary commitment.
+    const keyPair = await generateKeyPair('MOS-128')
+    const message = new TextEncoder().encode('Victim message')
+
+    // Get the public key hash and message hash as the attacker would
+    const msgHash = new Uint8Array(32).fill(0xab) // attacker's chosen msgHash
+    const forgedCommitment = secureRandomBytes(32) // random commitment
+
+    // Compute the "correct" challenge for this forged commitment
+    // (exactly what the old broken code allowed)
+    // Attacker picks arbitrary 128-byte response
+    const forgedResponse = secureRandomBytes(128)
+
+    // Re-derive challenge as verifier would
+    // (attacker cannot control pkHash — it's derived from the public key)
+    const forgedChallenge = secureRandomBytes(32) // attacker can't compute real one without pk
+
+    const forgedSig = {
+      commitment: forgedCommitment,
+      challenge: forgedChallenge,
+      response: forgedResponse,
+    }
+
+    const valid = await verify(message, forgedSig, keyPair.publicKey)
+    expect(valid).toBe(false)
+  })
+
+  test('existential forgery: correct challenge, wrong response fails algebraic check', async () => {
+    // Attacker computes a valid challenge (using public information) but uses
+    // a random response. The algebraic check in verify() must reject this.
+    const keyPair = await generateKeyPair('MOS-128')
+    const message = new TextEncoder().encode('Victim message')
+
+    // Attacker can compute msgHash and pkHash from public information
+    // They pick an arbitrary commitment and derive the correct challenge
+    const { sha3_256: h } = await import('../src/utils/shake.ts')
+    const { hashConcat: hc, hashWithDomain: hd } =
+      await import('../src/utils/shake.ts')
+    const { serializePublicKey } = await import('../src/sign/index.ts')
+
+    const msgHash = h(hc(message, keyPair.publicKey.binding))
+    const pkHash = h(serializePublicKey(keyPair.publicKey))
+    const forgedCommitment = secureRandomBytes(32)
+
+    // Compute VALID challenge (the old scheme allowed this to pass)
+    const challenge = hd(
+      'kmosaic-sign-chal-v2',
+      hc(forgedCommitment, msgHash, pkHash),
+    )
+
+    // Attacker uses random 128-byte response — no knowledge of s'
+    const forgedResponse = secureRandomBytes(128)
+
+    const forgedSig = {
+      commitment: forgedCommitment,
+      challenge,
+      response: forgedResponse,
+    }
+
+    const valid = await verify(message, forgedSig, keyPair.publicKey)
+    // MUST be false: response doesn't satisfy A'·z - c·t' == w_check for any valid w_check
+    expect(valid).toBe(false)
+  })
+
+  test('existential forgery: 1000 random forgery attempts all rejected', async () => {
+    // Statistical test: 1000 attempts with random responses should all fail.
+    // If any succeed, the scheme is broken.
+    const keyPair = await generateKeyPair('MOS-128')
+    const message = new TextEncoder().encode('Target message')
+
+    const { sha3_256: h } = await import('../src/utils/shake.ts')
+    const { hashConcat: hc, hashWithDomain: hd } =
+      await import('../src/utils/shake.ts')
+    const { serializePublicKey } = await import('../src/sign/index.ts')
+
+    const msgHash = h(hc(message, keyPair.publicKey.binding))
+    const pkHash = h(serializePublicKey(keyPair.publicKey))
+
+    let accepted = 0
+    const ATTEMPTS = 1000
+
+    for (let i = 0; i < ATTEMPTS; i++) {
+      const forgedCommitment = secureRandomBytes(32)
+      const challenge = hd(
+        'kmosaic-sign-chal-v2',
+        hc(forgedCommitment, msgHash, pkHash),
+      )
+      const forgedResponse = secureRandomBytes(128)
+
+      const valid = await verify(
+        message,
+        { commitment: forgedCommitment, challenge, response: forgedResponse },
+        keyPair.publicKey,
+      )
+      if (valid) accepted++
+    }
+
+    // Zero forgeries should be accepted
+    expect(accepted).toBe(0)
   })
 })

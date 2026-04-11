@@ -83,7 +83,7 @@ function centerMod(x: number, q: number): number {
  * @param q - Modulus
  * @returns Result vector (length m)
  */
-function matVecMul(
+export function matVecMul(
   A: Int32Array,
   v: Int8Array | Int32Array,
   m: number,

@@ -1206,16 +1206,16 @@ For complete audit details, see [SECURITY_REPORT.md](SECURITY_REPORT.md).
 
 ### 9.1 Benchmarks (Reference Implementation)
 
-Tested on Apple M2 Pro Mac, Bun runtime, single-threaded (MOS-128, December 2025):
+Tested on Apple M2 Pro Mac, Bun runtime, single-threaded (MOS-128, April 2026):
 
 | Operation           | Time (ms) | Ops/Sec | Comparison vs Classical      |
 | ------------------- | --------- | ------- | ---------------------------- |
-| **KEM KeyGen**      | 19.289 ms | 51.8    | ~1223.7x slower than X25519  |
-| **KEM Encapsulate** | 0.538 ms  | 1860.0  | ~12.7x slower than X25519    |
-| **KEM Decapsulate** | 4.220 ms  | 237.0   | ~138.5x slower than X25519   |
-| **Sign KeyGen**     | 19.204 ms | 52.1    | ~1555.0x slower than Ed25519 |
-| **Sign**            | 0.040 ms  | 25049.6 | ~3.5x slower than Ed25519    |
-| **Verify**          | 1.417 ms  | 705.9   | ~43.4x slower than Ed25519   |
+| **KEM KeyGen**      | 12.707 ms | 78.7    | ~852.4x slower than X25519   |
+| **KEM Encapsulate** | 0.495 ms  | 2021.6  | ~12.0x slower than X25519    |
+| **KEM Decapsulate** | 5.576 ms  | 179.3   | ~176.0x slower than X25519   |
+| **Sign KeyGen**     | 12.438 ms | 80.4    | ~1078.0x slower than Ed25519 |
+| **Sign**            | 0.073 ms  | 13697.4 | ~5.8x slower than Ed25519    |
+| **Verify**          | 1.477 ms  | 676.8   | ~44.6x slower than Ed25519   |
 
 ### 9.2 Size Comparison with Other PQ Schemes
 

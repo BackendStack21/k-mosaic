@@ -172,12 +172,12 @@ export interface EGRWResponse {
 
 /**
  * kMOSAIC Signature structure
- * Compatible with Go implementation's simple Fiat-Shamir scheme
+ * Uses a noiseless sub-SLSS Sigma protocol (fixed Finding 1: Existential Forgery)
  */
 export interface MOSAICSignature {
-  commitment: Uint8Array // 32 bytes: H(witness || msgHash || binding)
+  commitment: Uint8Array // 32 bytes: H(serialize(w) || serialize(t') || msgHash || binding)
   challenge: Uint8Array // 32 bytes: H(commitment || msgHash || pkHash)
-  response: Uint8Array // 64 bytes: SHAKE256 response
+  response: Uint8Array // 128 bytes: tBytes (64B = serialize(t')) || zBytes (64B = serialize(z = r + c·s'))
 }
 
 // =============================================================================

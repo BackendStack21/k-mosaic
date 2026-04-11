@@ -103,11 +103,21 @@ function toSerializable(obj: any): any {
 }
 
 function customDeserializePublicKey(data: Uint8Array): MOSAICPublicKey {
+  if (data.length < 4) {
+    throw new Error('Invalid public key: too short')
+  }
+  const MAX_PART = 8 * 1024 * 1024 // 8 MB per component
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength)
   let offset = 0
 
+  if (offset + 4 > data.length) {
+    throw new Error('Invalid public key: truncated level length')
+  }
   const levelLen = view.getUint32(offset, true)
   offset += 4
+  if (levelLen <= 0 || levelLen > 255 || offset + levelLen > data.length) {
+    throw new Error('Invalid public key: level length invalid')
+  }
   const levelStr = new TextDecoder().decode(
     data.subarray(offset, offset + levelLen),
   )
@@ -115,31 +125,55 @@ function customDeserializePublicKey(data: Uint8Array): MOSAICPublicKey {
 
   const params = getParams(levelStr as SecurityLevel)
 
+  if (offset + 4 > data.length) {
+    throw new Error('Invalid public key: truncated SLSS length')
+  }
   const slssLen = view.getUint32(offset, true)
   offset += 4
+  if (slssLen <= 0 || slssLen > MAX_PART || offset + slssLen > data.length) {
+    throw new Error('Invalid public key: SLSS component out of bounds')
+  }
   // Create a proper copy to ensure alignment for Int32Array views
   const slssData = new Uint8Array(slssLen)
   slssData.set(data.subarray(offset, offset + slssLen))
   const slss = slssDeserializePublicKey(slssData)
   offset += slssLen
 
+  if (offset + 4 > data.length) {
+    throw new Error('Invalid public key: truncated TDD length')
+  }
   const tddLen = view.getUint32(offset, true)
   offset += 4
+  if (tddLen <= 0 || tddLen > MAX_PART || offset + tddLen > data.length) {
+    throw new Error('Invalid public key: TDD component out of bounds')
+  }
   const tddData = new Uint8Array(tddLen)
   tddData.set(data.subarray(offset, offset + tddLen))
   const tdd = tddDeserializePublicKey(tddData)
   offset += tddLen
 
+  if (offset + 4 > data.length) {
+    throw new Error('Invalid public key: truncated EGRW length')
+  }
   const egrwLen = view.getUint32(offset, true)
   offset += 4
+  if (egrwLen <= 0 || egrwLen > MAX_PART || offset + egrwLen > data.length) {
+    throw new Error('Invalid public key: EGRW component out of bounds')
+  }
   const egrwData = new Uint8Array(egrwLen)
   egrwData.set(data.subarray(offset, offset + egrwLen))
   const egrw = egrwDeserializePublicKey(egrwData)
   offset += egrwLen
 
+  if (offset + 32 > data.length) {
+    throw new Error('Invalid public key: missing binding')
+  }
   const binding = new Uint8Array(32)
   binding.set(data.subarray(offset, offset + 32))
   offset += 32
+  if (offset !== data.length) {
+    throw new Error('Invalid public key: trailing bytes')
+  }
 
   return { slss, tdd, egrw, binding, params }
 }

@@ -480,7 +480,7 @@ async function runBenchmarks() {
     `│ KEM Ciphertext      │ ~${(7800).toString().padStart(6)} B │ ${(76).toString().padStart(8)} B │`,
   )
   console.log(
-    `│ Signature           │ ~${(7400).toString().padStart(6)} B │ ${(64).toString().padStart(8)} B │`,
+    `│ Signature           │    ${(204).toString().padStart(6)} B │ ${(64).toString().padStart(8)} B │`,
   )
   console.log('└─────────────────────┴─────────────┴─────────────┘')
 

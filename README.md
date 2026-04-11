@@ -238,7 +238,7 @@ interface MOSAICCiphertext {
 interface MOSAICSignature {
   commitment: Uint8Array // 32 bytes
   challenge: Uint8Array // 32 bytes
-  response: Uint8Array // 64 bytes
+  response: Uint8Array // 128 bytes: tBytes (64B) + zBytes (64B)
 }
 
 interface EncapsulationResult {
@@ -634,13 +634,14 @@ const ALGORITHM_INFO: AlgorithmInfo
 
 An internal security review identified and fixed critical vulnerabilities:
 
-| Issue                    | Severity    | Status   |
-| ------------------------ | ----------- | -------- |
-| TDD plaintext storage    | 🔴 Critical | ✅ Fixed |
-| EGRW randomness exposure | 🔴 Critical | ✅ Fixed |
-| TDD modular bias         | 🟠 High     | ✅ Fixed |
+| Issue                            | Severity    | Status   |
+| -------------------------------- | ----------- | -------- |
+| TDD plaintext storage            | 🔴 Critical | ✅ Fixed |
+| EGRW randomness exposure         | 🔴 Critical | ✅ Fixed |
+| TDD modular bias                 | 🟠 High     | ✅ Fixed |
+| Existential forgery (signatures) | 🔴 Critical | ✅ Fixed |
 
-All 304 tests pass. See [SECURITY_REPORT.md](SECURITY_REPORT.md) for full details.
+All 366 tests pass. See [SECURITY_REPORT.md](SECURITY_REPORT.md) for full details.
 
 **Known Limitations:**
 

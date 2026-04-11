@@ -1,460 +1,560 @@
-# 🔐 kMOSAIC Security Audit Report
+# kMOSAIC Deep Security Review Report
 
-**Date:** December 27, 2025  
-**Auditor:** Security Analysis (White Hat Review)  
-**Version:** 1.0.0
-**Scope:** Full source code review of kMOSAIC cryptographic implementation
+**Date:** 2026-04-10 (updated 2026-04-11, revalidation added 2026-04-11)  
+**Repository:** `BackendStack21/k-mosaic`  
+**Scope:** `src/**`, CLI entrypoint, deserialization and cryptographic verification surfaces
 
 ---
 
 ## Executive Summary
 
-This security audit identified **13 potential vulnerabilities** in the kMOSAIC post-quantum cryptographic implementation. Two issues were marked as **CRITICAL** and have been **FIXED**. The implementation now shows good security practices across all three encryption schemes.
+This review identified one **critical exploitable cryptographic weakness** and multiple **input-handling hardening gaps**. **All findings are now remediated.**
 
-| Severity    | Count | Status                              |
-| ----------- | ----- | ----------------------------------- |
-| 🔴 Critical | 2     | ✅ **FIXED**                        |
-| 🟠 High     | 3     | ✅ 1 FIXED, 2 ACKNOWLEDGED          |
-| 🟡 Medium   | 5     | ✅ 1 FALSE POSITIVE, 4 ACKNOWLEDGED |
-| 🔵 Low/Info | 3     | ⚠️ Consider addressing              |
+- ✅ Fixed in original PR:
+  - Public-key deserialization hardening (library + CLI): strict bounds, component caps, canonical-length enforcement.
+  - Signature deserialization canonicalization: reject trailing bytes.
+- ✅ Fixed in follow-up patch (2026-04-11):
+  - **Signature existential forgery (Critical):** replaced pseudorandom response with an algebraically verifiable sub-SLSS Sigma protocol witness. `verify()` now checks the full lattice relation.
 
 ---
 
-## 🔴 CRITICAL VULNERABILITIES
+## Findings
 
-### VULN-001: TDD Encryption Stores Plaintext in Ciphertext
+## 1) Critical: Signature existential forgery — ✅ FIXED
 
-**File:** `src/problems/tdd/index.ts`  
-**Lines:** 398-413 (original), now 454-480 (fixed)  
-**Status:** ✅ **FIXED**
+- **Severity:** Critical
+- **Status:** ✅ Fixed (2026-04-11)
+- **File:** `src/sign/index.ts`
+- **Location:** `sign()` and `verify()` logic
+
+### Impact (before fix)
+
+`verify()` validated only whether:
+
+- signature structure was well-formed, and
+- `signature.challenge == H(signature.commitment, message, publicKeyHash)`.
+
+It did **not** verify that `signature.response` proved secret-key knowledge.  
+An attacker could choose arbitrary commitment/response and set challenge consistently, yielding a valid signature without the secret key.
+
+### Fix applied
+
+Replaced the pseudorandom SHAKE256 response with a **noiseless sub-SLSS Sigma protocol**:
+
+**Setup:** A dedicated signing sub-key `(A', s', t' = A'·s')` is derived deterministically from the master seed:
+
+- `A'` is M_SIG×N_SIG (public, derived from `publicKeyHash`)
+- `s'` is a sparse ternary secret in `{-1,0,1}^{N_SIG}` (private)
+- `t' = A'·s'` (noiseless, exact relation)
+
+**Signing (rejection-sampling loop):**
+
+1. Sample fresh mask `r ← uniform [-GAMMA_1, GAMMA_1]^{N_SIG}`
+2. `w = A'·r mod Q_SIG`
+3. `commitment = H(serialize(w) || serialize(t') || msgHash || binding)`
+4. `challenge = H_domain(commitment || msgHash || pkHash)`
+5. `c_scalar = (challenge[0] & 1) ? -1 : +1`
+6. `z = r + c_scalar * s'`; reject if `||z||∞ > GAMMA_1 - 1`, else accept
+7. `response = serialize(t') || serialize(z)` (128 bytes total)
+
+**Verification:**
+
+1. Verify `challenge` matches recomputed hash (message + key binding)
+2. Parse `tBytes` and `zBytes` from response
+3. Bound-check `||z||∞ ≤ GAMMA_1 - 1`
+4. Re-derive `A'` from `publicKeyHash`
+5. Compute `w_check = A'·z - c_scalar·t' mod Q_SIG`
+6. Verify `H(serialize(w_check) || tBytes || msgHash || binding) == commitment`
+
+This check is unforgeable: a forger without `s'` cannot produce `(tBytes, zBytes)` satisfying step 6, because they would need to invert the lattice relation `A'·s' = t'` to know which `t'` to commit to, and then find a short `z` — computationally equivalent to the noiseless SLSS problem.
+
+**Signature size:** 204 bytes (up from 140; response grows from 64 to 128 bytes)
+
+**Parameters:**
+
+```
+N_SIG = M_SIG = 32   # sub-lattice dimension
+Q_SIG = 12289        # prime modulus
+W_SIG = 8            # signing secret weight
+GAMMA_1 = 3000       # mask bound
+BETA = 1             # rejection slack
+```
+
+**Expected rejection rate:** ~1.07% per iteration (< 2 iterations on average).
+
+### Regression tests added
+
+- `test/sign.test.ts` — `describe('Forgery Resistance')`:
+  - `existential forgery attack is rejected: arbitrary commitment + any response`
+  - `existential forgery: correct challenge, wrong response fails algebraic check`
+  - `existential forgery: 1000 random forgery attempts all rejected`
+
+---
+
+## 2) High: Public-key parser hardening gaps (DoS / parser confusion)
+
+- **Severity:** High
+- **Status:** ✅ Fixed
+- **Files:**
+  - `src/kem/index.ts`
+  - `src/k-mosaic-cli.ts`
+
+### Risk before fix
+
+- Missing maximum component-size checks could allow oversized length headers to drive expensive parsing paths.
+- Missing canonical end-of-buffer checks allowed trailing-byte malleability.
+- CLI custom deserializer lacked robust truncation/bounds checks and could throw on malformed length fields unexpectedly.
+
+### Fixes applied
+
+- Added per-component size cap (`8 MB`) in public-key deserialization.
+- Enforced strict bounds checks before every length read and section parse.
+- Enforced canonical parse completion (`offset === data.length`) to reject trailing bytes.
+- Added malformed input regression tests.
+
+---
+
+## 3) Medium: Signature parser accepted trailing bytes (canonicalization gap)
+
+- **Severity:** Medium
+- **Status:** ✅ Fixed
+- **File:** `src/sign/index.ts`
+
+### Risk before fix
+
+`deserializeSignature()` accepted trailing bytes after the declared response.  
+This creates non-canonical encodings and can cause downstream signature-encoding ambiguity.
+
+### Fix applied
+
+- Added strict trailing-byte rejection (`offset !== data.length` → error).
+- Added regression test coverage.
+
+---
+
+## Code Changes
+
+1. **KEM public key deserialization hardening**
+   - File: `src/kem/index.ts`
+   - Added component-size caps, trailing-byte rejection.
+
+2. **CLI public key deserialization hardening**
+   - File: `src/k-mosaic-cli.ts`
+   - Added strict truncation/bounds checks, component-size caps, trailing-byte rejection.
+
+3. **Signature deserialization canonicalization**
+   - File: `src/sign/index.ts`
+   - Reject trailing bytes.
+
+4. **Signature existential forgery fix (Critical — 2026-04-11)**
+   - File: `src/sign/index.ts`
+   - Replaced SHAKE256 pseudorandom response with sub-SLSS Sigma protocol witness.
+   - Exported `matVecMul` from `src/problems/slss/index.ts`.
+
+5. **Regression tests**
+   - Added: `test/kem-public-key-malformed.test.ts`
+   - Updated: `test/sign.test.ts` (trailing bytes + 3 forgery resistance tests)
+   - Updated: `test/validate-sizes.test.ts` (new 204-byte signature size)
+
+---
+
+## Validation
+
+- ✅ `bun test` — 366/366 tests pass.
+- ✅ Sign/verify roundtrips verified for MOS-128 and MOS-256.
+- ✅ 1000 random forgery attempts rejected in automated test.
+- ✅ Serialization/deserialization roundtrips verified.
+
+---
+
+## Recommended Next Security Actions
+
+1. Add explicit parser limits for all externally supplied serialized artifacts (ciphertext/signature/public key) in every API boundary.
+2. Add adversarial fuzzing for all deserializers.
+3. **Long-term:** Consider replacing the signing scheme with ML-DSA (CRYSTALS-Dilithium, NIST-standardized) for maximum assurance. The current sub-SLSS Sigma protocol provides practical forgery resistance but is not a NIST-standardized construction.
+
+---
+
+# Deep Cryptographic Audit — Round 2
+
+**Date:** 2026-04-11  
+**Auditor:** @security-auditor v1.2.0  
+**Scope:** Full cryptographic security assessment — hardness assumptions, KEM correctness, signature soundness, parameter security levels, side-channel exposure  
+**Test suite at time of audit:** 366/366 pass
+
+---
+
+## Executive Summary
+
+This second-pass audit identified **four new CRITICAL vulnerabilities** that are distinct from (and not covered by) the findings in Round 1. All four are **currently unpatched**. Independent revalidation (2026-04-11) determined that **one is a false positive (CRIT-01)**, two are valid but less severe than originally stated (CRIT-02, CRIT-03 downgraded to HIGH), and one is valid and critical with a deeper root cause than the auditor identified (CRIT-04). Additionally, four HIGH findings and structural design concerns are documented below. HIGH findings have not yet been independently revalidated.
+
+**Current effective security level: reduced (see revalidation below).** CRIT-04 (signature forgery) is critical and unpatched. KEM security is reduced to SLSS-only due to CRIT-02 and CRIT-03.
+
+---
+
+## New Critical Findings
+
+---
+
+### CRIT-01: NIZK Proof Leaks All KEM Shares — Total KEM Break ⚠️ FALSE POSITIVE
+
+- **Severity:** ~~CRITICAL~~ → **Informational** (revalidated 2026-04-11)
+- **Status:** ⚠️ False Positive — no patch needed
+- **File:** `src/entanglement/index.ts:295–312`
+- **OWASP:** A02:2021 Cryptographic Failures
 
 #### Description
 
-The TDD encryption scheme was storing the plaintext message directly in the ciphertext array for "exact recovery". This completely defeated the purpose of encryption.
+The NIZK proof appended to every KEM ciphertext is intended to prove knowledge of the three secret shares without revealing them. However, the "mask" used to hide each share is derived deterministically from the `challenge`, which is itself stored in plaintext inside the proof. This means any passive eavesdropper — with only the ciphertext — can recover all three shares and derive the shared secret.
 
-#### Original Vulnerable Code
+#### Evidence
 
 ```typescript
-// Store message length and bytes for exact recovery
-const metaOffset = masked.length + hintLen
-data[metaOffset] = message.length
-for (let i = 0; i < message.length; i++) {
-  data[metaOffset + 1 + i] = message[i] // PLAINTEXT STORED DIRECTLY
+// src/entanglement/index.ts:295-309
+const responses: Uint8Array[] = []
+for (let i = 0; i < 3; i++) {
+  // mask is derived ONLY from the challenge, which is stored in the proof
+  const fullMask = sha3_256(
+    hashWithDomain(`${DOMAIN_NIZK}-mask-${i}`, challenge),
+  )
+  const mask = fullMask.slice(0, shares[i].length)
+
+  const response = new Uint8Array(shares[i].length + 32)
+  for (let j = 0; j < shares[i].length; j++) {
+    response[j] = shares[i][j] ^ mask[j] // share XOR mask
+  }
+  response.set(commitRandomness[i], shares[i].length)
+  responses.push(response)
 }
+return { challenge, responses, commitments } // challenge is public in the proof
 ```
 
-#### Fix Applied
+#### Attack (passive — no secret key required)
 
-The encryption now uses XOR encryption with a keystream derived from the masked tensor matrix:
+For each share `i`, given only the proof object:
+
+1. Recompute `mask_i = SHA3(H("kmosaic-nizk-mask-i", proof.challenge))[0:len(share_i)]`
+2. Recover `share_i = proof.responses[i][0:len(share_i)] XOR mask_i`
+3. XOR all three shares to get the 32-byte ephemeral secret
+4. Derive the shared secret via the KEM's key derivation path
+
+**Cost:** ~6 SHA3 invocations. No secret key needed. Works against any ciphertext.
+
+#### Root Cause
+
+A Sigma protocol mask must be statistically independent of the challenge. Here `mask = f(challenge)` makes the "mask" fully deterministic given the proof, so the XOR is trivially reversible. True zero-knowledge requires the mask to be chosen **before** the challenge (i.e., as part of the commitment phase), not derived from it.
+
+#### Fix Required
+
+This NIZK construction is fundamentally broken and cannot be repaired by tweaking the mask derivation. The NIZK proof should be **removed entirely** from the KEM ciphertext. If proof of well-formedness is needed, use an Encrypt-then-MAC or the Fujisaki-Okamoto transform applied correctly (i.e., the re-encryption check in `decapsulate` already achieves this for honest receivers — the NIZK adds nothing beyond leaking the shares).
+
+#### Revalidation (2026-04-11) — VERDICT: FALSE POSITIVE
+
+The auditor's claim is incorrect. The challenge computation at `src/entanglement/index.ts:286-291` includes `hashWithDomain("kmosaic-nizk-msg", message)` where `message` is the `ephemeralSecret` — the value an eavesdropper does NOT possess. Without the ephemeral secret, the eavesdropper cannot recompute the challenge, cannot derive the mask, and cannot extract shares from the responses.
+
+The verifier CAN extract shares during verification, but only after decrypting and recovering the ephemeral secret through the KEM — at which point they already have the plaintext, so no new information is leaked.
+
+The ZK property is technically weakened (not simulator-extractable), but this is a cosmetic shortcoming, not a confidentiality break. The auditor's attack step 1 ("Recompute `mask_i = SHA3(H("kmosaic-nizk-mask-i", proof.challenge))`") is correct in mechanics but omits that the challenge itself cannot be recomputed without the ephemeral secret — the challenge stored in the proof was computed using private data.
+
+**Corrected severity: Informational.** No code change required.
+
+---
+
+### CRIT-02: EGRW Secret Key Never Used in Decryption — Keyless Decryption ❌ CONFIRMED
+
+- **Severity:** ~~CRITICAL~~ → **HIGH** (revalidated 2026-04-11; see note below)
+- **Status:** ❌ Open — confirmed valid, not patched
+- **File:** `src/problems/egrw/index.ts:375–463`
+- **OWASP:** A02:2021 Cryptographic Failures
+
+#### Description
+
+`egrwDecrypt` is supposed to use the recipient's secret walk to derive a shared graph vertex, which in turn keys the decryption keystream. Instead, both `egrwEncrypt` and `egrwDecrypt` derive the keystream from the same three **public** values: `ephemeralVertex` (from the ciphertext), `vStart`, and `vEnd` (both from the public key). The secret key parameter is accepted but never read.
+
+#### Evidence
 
 ```typescript
-// Derive encryption keystream from the MASKED matrix
+// egrwEncrypt (src/problems/egrw/index.ts:401-406)
+const keyInput = hashConcat(
+  hashWithDomain(DOMAIN_MASK, sl2ToBytes(ephemeralVertex)), // in ciphertext
+  hashWithDomain(DOMAIN_MASK, sl2ToBytes(vStart)), // public key
+  hashWithDomain(DOMAIN_MASK, sl2ToBytes(vEnd)), // public key
+)
+const keyStream = shake256(keyInput, 32)
+
+// egrwDecrypt (src/problems/egrw/index.ts:449-454) — identical computation
+const keyInput = hashConcat(
+  hashWithDomain(DOMAIN_MASK, sl2ToBytes(ephemeralVertex)), // same: from ciphertext
+  hashWithDomain(DOMAIN_MASK, sl2ToBytes(vStart)), // same: public key
+  hashWithDomain(DOMAIN_MASK, sl2ToBytes(vEnd)), // same: public key
+)
+const keyStream = shake256(keyInput, 32)
+// secretKey parameter is never accessed
+```
+
+The code comment in `egrwDecrypt` (line 424) explicitly acknowledges this: _"The recipient doesn't need the secret walk for decryption in this KEM construction since the keystream is derived from public values."_
+
+#### Attack
+
+Any party who observes the ciphertext `(ephemeralVertex, masked)` and the recipient's public key `(vStart, vEnd)` can recompute the keystream and XOR-decrypt the message:
+
+```
+keyInput  = H(sl2ToBytes(ephemeralVertex)) || H(sl2ToBytes(vStart)) || H(sl2ToBytes(vEnd))
+keyStream = SHAKE256(keyInput, 32)
+plaintext = masked XOR keyStream
+```
+
+#### Fix Required
+
+True EGRW-based PKE requires the recipient to apply their secret walk to the sender's ephemeral vertex: `sharedVertex = applyWalk(ephemeralVertex, secretWalk, p)`. The keystream must be derived from this `sharedVertex`, which only the secret key holder can compute (given the graph walk hardness assumption). This is a complete redesign of the EGRW encryption scheme.
+
+#### Revalidation (2026-04-11) — VERDICT: CONFIRMED VALID
+
+Independent code review confirms the auditor's finding. The keystream at `src/egrw/index.ts:435-463` is derived entirely from public values (`ephemeralVertex`, `vStart`, `vEnd`). The `secretKey.walk` parameter is accepted but never accessed. EGRW provides zero confidentiality.
+
+**Severity downgraded from CRITICAL to HIGH:** While EGRW's share (share3) is recoverable by any observer, this alone does not break the full KEM — the ephemeral secret is XOR-split into 3 shares, and an attacker still needs all 3 to recover the shared secret. Combined with CRIT-03, an attacker recovers shares 2 and 3, reducing KEM security to SLSS alone. This violates the defense-in-depth claim but is not a complete KEM break if SLSS is sound.
+
+---
+
+### CRIT-03: TDD Secret Key Never Used in Decryption — Keyless Decryption ❌ CONFIRMED
+
+- **Severity:** ~~CRITICAL~~ → **HIGH** (revalidated 2026-04-11; see note below)
+- **Status:** ❌ Open — confirmed valid, not patched
+- **File:** `src/problems/tdd/index.ts:516–591`
+- **OWASP:** A02:2021 Cryptographic Failures
+
+#### Description
+
+`tddDecrypt` recomputes the secret tensor `T_secret` from the private factors, but then never uses it. Instead, both `tddEncrypt` and `tddDecrypt` derive the keystream from `DOMAIN_HINT || maskedBytes`, where `maskedBytes` is the masked matrix stored in the ciphertext. The secret factors are recomputed and then immediately zeroized without having been used for decryption.
+
+#### Evidence
+
+```typescript
+// tddEncrypt (src/problems/tdd/index.ts:461-466)
 const maskedBytes = new Uint8Array(
   masked.buffer,
   masked.byteOffset,
   masked.byteLength,
 )
 const keystream = shake256(hashWithDomain(DOMAIN_HINT, maskedBytes), 32)
+// keystream derived entirely from public ciphertext data
 
-// XOR encrypt the message with the keystream
-const encryptedMsg = new Uint8Array(32)
-for (let i = 0; i < 32; i++) {
-  encryptedMsg[i] = (message[i] || 0) ^ keystream[i]
-}
-```
-
-#### Additional Fix: Modular Bias (VULN-004)
-
-Also fixed rejection sampling in `sampleVectorFromSeed()` to eliminate modular bias.
-
----
-
-### VULN-002: EGRW Encryption Exposes Randomness in Ciphertext
-
-**File:** `src/problems/egrw/index.ts`  
-**Lines:** 360-365 (original), now 359-410 (fixed)  
-**Status:** ✅ **FIXED**
-
-#### Description
-
-The EGRW ciphertext was including the encryption randomness in plaintext. Since the keystream was derived deterministically from the public key and this randomness, anyone could reconstruct the keystream and decrypt.
-
-#### Original Vulnerable Code
-
-```typescript
-// Commitment: randomness || masked_message
-const commitment = new Uint8Array(64)
-commitment.set(randomness.slice(0, 32), 0) // ENCRYPTION RANDOMNESS EXPOSED
-commitment.set(masked, 32)
-```
-
-#### Fix Applied
-
-The encryption now uses an ephemeral random walk to create a vertex point. Only the derived vertex (not the randomness) is included in the ciphertext:
-
-```typescript
-// Generate ephemeral walk from randomness
-const ephemeralWalk = sampleWalk(hashWithDomain(DOMAIN_ENCRYPT, randomness), k)
-
-// Compute ephemeral endpoint by walking from vStart
-const ephemeralVertex = applyWalk(vStart, ephemeralWalk, p)
-
-// Derive keystream from ephemeral vertex and public key
-const keyInput = hashConcat(
-  hashWithDomain(DOMAIN_MASK, sl2ToBytes(ephemeralVertex)),
-  hashWithDomain(DOMAIN_MASK, sl2ToBytes(vStart)),
-  hashWithDomain(DOMAIN_MASK, sl2ToBytes(vEnd)),
+// tddDecrypt (src/problems/tdd/index.ts:570-578)
+const maskedBytes = new Uint8Array(
+  masked.buffer,
+  masked.byteOffset,
+  masked.byteLength,
 )
-const keyStream = shake256(keyInput, 32)
-
-// Ciphertext contains only the ephemeral vertex and masked message (NOT randomness)
-return { vertex: ephemeralVertex, commitment: masked }
+const keystream = shake256(hashWithDomain(DOMAIN_HINT, maskedBytes), 32)
+// identical derivation — T_secret (lines 551-561) is recomputed but never read
+zeroize(T_secret) // recomputed only to be thrown away
 ```
 
----
+#### Attack
 
-## 🟠 HIGH SEVERITY VULNERABILITIES
+Any party with the ciphertext `data[]` can decrypt:
 
-### VULN-003: Non-Constant-Time Decapsulation Operations
+```
+masked    = data[0 : n²]
+maskedBytes = bytes(masked)
+keystream = SHAKE256(H("kmosaic-tdd-hint", maskedBytes), 32)
+plaintext = encryptedMsg XOR keystream
+```
 
-**File:** `src/kem/index.ts`  
-**Lines:** 310-360  
-**Status:** 🟡 ACKNOWLEDGED (Low Risk)
+#### Fix Required
 
-#### Description
+Correct TDD-based PKE would require the recipient to use their secret factors to reconstruct the contracted product and subtract the masking tensor, then re-derive the keystream from the **unmasked** contracted product (which only the secret key holder can compute). This is a complete redesign of the TDD encryption scheme.
 
-While the final selection uses `constantTimeSelect`, intermediate operations (`encapsulateDeterministic`, `verifyNIZKProof`) are not constant-time, creating a potential timing oracle.
+#### Revalidation (2026-04-11) — VERDICT: CONFIRMED VALID
 
-#### Analysis
+Independent code review confirms the auditor's finding. At `src/tdd/index.ts:570-578`, the keystream is derived from `DOMAIN_HINT || maskedBytes` where `maskedBytes` comes directly from the ciphertext. The secret tensor factors ARE reconstructed (lines 550-561) but are never used for keystream derivation — they are immediately zeroized. TDD provides zero confidentiality.
 
-The Fujisaki-Okamoto transform pattern is correctly implemented. The timing variation comes from:
-
-- Re-encryption operations (tensor computations)
-- NIZK proof verification
-
-However, the implicit rejection mechanism ensures that even if timing reveals validity, the returned secret is still cryptographically bound to the ciphertext. This is a defense-in-depth measure.
-
-#### Recommendation
-
-For high-security deployments, consider:
-
-1. Adding artificial delay padding
-2. Moving to WebAssembly for constant-time tensor operations
+**Severity downgraded from CRITICAL to HIGH:** Same reasoning as CRIT-02. TDD's share (share2) is recoverable by any observer. Combined with CRIT-02, an attacker recovers 2 of 3 XOR shares, reducing KEM security entirely to SLSS. The "three independent problems" defense-in-depth is security theater for 2 of 3 components, but the KEM is not completely broken if SLSS holds.
 
 ---
 
-### VULN-004: Modular Bias in TDD Vector Sampling
+### CRIT-04: Sub-SLSS Sigma Protocol — Existential Forgery ❌ CONFIRMED (deeper root cause)
 
-**File:** `src/problems/tdd/index.ts`  
-**Lines:** 175-220 (original), now uses rejection sampling  
-**Status:** ✅ **FIXED**
+- **Severity:** CRITICAL (revalidated 2026-04-11; confirmed, root cause corrected)
+- **Status:** ❌ Open — confirmed valid, not patched
+- **File:** `src/sign/index.ts:450–451`
+- **OWASP:** A07:2021 Identification and Authentication Failures
 
 #### Description
 
-TDD vector sampling was using direct modular reduction without rejection sampling, introducing statistical bias.
+The sub-SLSS Sigma protocol challenge is reduced to a single bit (`challenge[0] & 1`), yielding a challenge space of exactly `{-1, +1}`. This gives the protocol a soundness error of 1/2 — equivalent to a coin flip. A forger can deterministically produce a valid signature for any message without knowing the secret key.
 
-#### Original Vulnerable Code
+#### Evidence
 
 ```typescript
-for (let i = 0; i < n; i++) {
-  result[i] = mod(view.getUint32(i * 4, true), q) // Direct mod = bias
-}
+// src/sign/index.ts:450-451
+const cScalar = (challenge[0] & 1) === 0 ? 1 : -1
+// Challenge space: {-1, +1} — two possible values
 ```
 
-#### Applied Fix
+The verification equation is: `A'·z - c_scalar·t' ≡ w_check (mod Q_SIG)`, then `H(w_check || t' || msg || binding) == commitment`.
 
-Implemented proper rejection sampling in `sampleVectorFromSeed()`:
+#### Forgery Algorithm (O(1))
 
-```typescript
-const threshold = 0xffffffff - (0xffffffff % q) - 1
-let idx = 0
-while (idx < n) {
-  const value = view.getUint32(offset * 4, true)
-  offset++
-  if (value <= threshold) {
-    result[idx] = mod(value, q)
-    idx++
-  }
-  // Regenerate entropy if needed...
-}
-```
+Given target message `msg` and public key `(publicKey, publicKeyHash)`:
 
-This eliminates statistical bias by rejecting values that would cause modular reduction bias.
+1. Choose arbitrary short vector `z_fake ∈ [-GAMMA_1+1, GAMMA_1-1]^{N_SIG}`
+2. Choose arbitrary `t_fake` (e.g., zero vector)
+3. For each `c ∈ {+1, -1}`:
+   - Compute `w_fake = A'·z_fake - c·t_fake mod Q_SIG`
+   - Compute `commitment_fake = H(serialize(w_fake) || serialize(t_fake) || msgHash || binding)`
+   - Compute `challenge_fake = H_domain(commitment_fake || msgHash || pkHash)`
+   - Derive `c_scalar_fake = (challenge_fake[0] & 1) == 0 ? 1 : -1`
+   - If `c_scalar_fake == c`: output `(commitment_fake, response = t_fake||z_fake)` — **this is a valid forgery**
+4. Exactly one of the two values of `c` will always match — one iteration guaranteed.
 
-### VULN-014: Decapsulation throws on malformed ciphertext (implicit oracle)
+**Cost:** ~2 matrix multiplications + 4 hash calls. Forgery is deterministic and takes O(1).
 
-**File:** `src/kem/index.ts`  
-**Lines:** 360-420 (approx)  
-**Status:** ✅ **FIXED**
+#### Why Existing Tests Don't Catch This
+
+The three forgery resistance tests in `test/sign.test.ts` use **random** forgery attempts (arbitrary commitment/response bytes). They do not attempt the targeted algebraic forgery described above, so they pass despite the vulnerability.
+
+#### Fix Required
+
+The challenge must be drawn from a large challenge set (e.g., challenge polynomials in Dilithium use challenges with exactly 60 ±1 coefficients out of 256, giving `C(256,60)·2^60 ≈ 2^249` possibilities). At minimum, use all 256 bits of the challenge hash as a binary vector `c ∈ {0,1}^{256}` and modify the signing/verification relation accordingly. Better: replace with ML-DSA (NIST FIPS 204).
+
+---
+
+## New High Findings
+
+---
+
+### HIGH-01: SLSS Ciphertext Leaks Bit Equality — IND-CPA Violation ❌ CONFIRMED
+
+- **Severity:** HIGH (revalidated 2026-04-11; confirmed)
+- **Status:** ❌ Open — confirmed valid, not patched
+- **File:** `src/problems/slss/index.ts`
 
 #### Description
 
-Certain malformed or corrupted ciphertexts (for example, a truncated NIZK proof or malformed fragment lengths) could cause `decapsulate()` to throw exceptions or exhibit distinguishable behavior. This could be used as a decryption oracle by an attacker to learn about ciphertext validity.
+In `slssEncrypt`, each of the 256 message bits is encoded by adding a scaled bit value to a dot product `tDotR = t · r`. Because `t` and `r` are shared across all 256 bit positions, the ciphertext leaks whether any two bits of the plaintext are equal: `v[i] - v[j] = (bit_i - bit_j) * floor(q/2)`, which is either 0, +floor(q/2), or -floor(q/2) — distinguishable from noise with overwhelming probability. This breaks IND-CPA.
 
-#### Fix Applied
+#### Fix Required
 
-- Compute the **implicit rejection value** early from the raw ciphertext bytes and use it as the default return value on any validation failure.
-- Wrap critical parsing and verification steps in try/catch blocks: serialization, component decryption (SLSS/TDD/EGRW), NIZK deserialization and verification, and re-encapsulation. Any failure marks decapsulation as invalid but does not throw.
-- Normalize share lengths (expect 32-byte shares) and use zeroed fallbacks to avoid reconstruction exceptions.
-- Replace direct ciphertext byte comparison with fixed-length SHA3-256 hash comparisons to avoid leaks from variable-length ciphertexts.
-- Add a public key consistency check: `sha3_256(serializePublicKey(publicKey)) === secretKey.publicKeyHash`; treat mismatches as invalid decapsulation.
-- Added unit tests exercising tampering and malformed inputs: `test/kem-malformed.test.ts`.
+Each bit must use an independent ephemeral `r_i` (re-sample fresh randomness per bit), or switch to a scheme where a single `r` encodes the entire message without per-bit signals.
 
-These changes ensure `decapsulate()` always returns a 32-byte pseudorandom secret (implicit reject) on invalid input, preventing oracle-style leakage.
+#### Revalidation (2026-04-11) — VERDICT: CONFIRMED VALID
+
+Independent code review confirms. At `src/problems/slss/index.ts:581`, `tDotR = innerProduct(t, r, q)` returns a single scalar (verified at line 198-213: `innerProduct` returns `mod(sum, q)`, a number). This scalar is reused for all 256 bit positions at line 584: `v[i] = mod(tDotR + e2[i] + encodedMsg[i], q)`.
+
+Computing `v[i] - v[j] = (e2[i] - e2[j]) + (encodedMsg[i] - encodedMsg[j])`:
+
+- Equal bits: difference ≈ N(0, 2σ²) with σ=3.19, std dev ≈ 4.51
+- Different bits: difference ≈ ±6144 + N(0, 2σ²)
+
+The 6144 gap vs. 4.51 noise std dev makes bit equality trivially distinguishable, confirming the IND-CPA break. In the KEM context, this leaks pairwise equality of encrypted share bits, providing partial information about the SLSS share.
 
 ---
 
-### VULN-005: Potential Integer Precision Issues
+### HIGH-02: EGRW Prime Too Small — Discrete Log Breakable ❌ CONFIRMED
 
-**File:** `src/problems/slss/index.ts`  
-**Lines:** 87-101  
-**Status:** 🟡 ACKNOWLEDGED (Low Risk)
+- **Severity:** HIGH (revalidated 2026-04-11; confirmed)
+- **Status:** ❌ Open — confirmed valid, not patched
+- **File:** `src/core/params.ts` (EGRW parameters), `src/problems/egrw/index.ts`
 
 #### Description
 
-Matrix operations accumulate products before reduction. While the code claims safety, edge cases with negative values or specific parameter combinations need verification.
+The EGRW scheme uses `p = 1021` (MOS-128) and `p = 2039` (MOS-256). The SL₂(𝔽_p) group has order approximately `p³ ≈ 10⁹` for `p=1021`. Baby-step Giant-step solves the discrete logarithm on this group in ~`sqrt(p³) ≈ 2^15` operations — far below 128-bit security. For `p=2039`, BSGS requires ~`2^16.5` operations. Achieving 128-bit security requires `p ≥ 2^43` (such that `p³ ≥ 2^128`).
 
-#### Analysis
+#### Fix Required
 
-- Maximum accumulation: `1000 * 12289² ≈ 1.5 × 10^11` (within 2^53 safe range)
-- Negative value handling: `centerMod` correctly handles edge cases
-- Sparse vector interactions: Values in {-1, 0, 1} are safe
+Increase `p` to at least `2^43` for MOS-128 and `2^86` for MOS-256, or use a different group where the hardness assumption is well-studied at the required bit length.
 
-**Conclusion:** No issue found. The implementation correctly stays within JavaScript's safe integer range.
+#### Revalidation (2026-04-11) — VERDICT: CONFIRMED VALID
+
+Independent code review confirms. At `src/core/params.ts:45`, p=1021; at line 76, p=2039. The exact group order |SL(2, Z_p)| = p(p-1)(p+1):
+
+- MOS-128: 1021 x 1020 x 1022 = 1,064,331,240 ≈ 2^30. BSGS: ~2^15 ops.
+- MOS-256: 2039 x 2038 x 2040 = 8,474,078,640 ≈ 2^33. BSGS: ~2^16.5 ops.
+
+Note: this is currently academic since CRIT-02 means EGRW's secret key is never used in decryption anyway. But if CRIT-02 were fixed, the primes would still be far too small.
 
 ---
 
-## 🟡 MEDIUM SEVERITY VULNERABILITIES
+### HIGH-03: TDD Hardness Has No Average-Case Reduction ❌ CONFIRMED
 
-### VULN-006: JavaScript JIT Timing Variations
-
-**File:** `src/utils/constant-time.ts`  
-**Lines:** 13-15  
-**Status:** 🟡 ACKNOWLEDGED
+- **Severity:** HIGH (revalidated 2026-04-11; confirmed)
+- **Status:** ❌ Open — confirmed valid, not patched
+- **File:** `src/problems/tdd/index.ts` (design-level)
 
 #### Description
 
-The code correctly acknowledges that JavaScript cannot guarantee constant-time execution. V8's speculative optimization, garbage collection, and JIT compilation introduce data-dependent timing.
+The security argument for TDD-based PKE relies on the hardness of recovering random tensor decomposition factors from the public tensor `T`. While worst-case tensor decomposition is NP-hard, there is no known average-case hardness reduction for this problem. Random instances of tensor decomposition are often tractable via algebraic methods (e.g., Jennrich's algorithm solves exact decomposition in polynomial time for generic tensors). The assumption that random TDD instances are hard lacks peer-reviewed cryptographic support.
 
-#### Mitigation
+#### Fix Required
 
-- Document as known limitation (already done in code comments)
-- Consider WebAssembly implementation for security-critical paths in future versions
-- Timing jitter already used in signing operations as defense-in-depth
+Replace TDD with a hardness assumption that has a known average-case reduction (e.g., LWE, NTRU, McEliece). This requires a scheme redesign.
+
+#### Revalidation (2026-04-11) — VERDICT: CONFIRMED VALID
+
+Independent code review confirms. The source at `src/problems/tdd/index.ts:4` claims "NP-hard in general" and line 360 says "believed to be hard." Factor triples `(a_i, b_i, c_i)` are sampled uniformly at random (lines 252-281), not from a structured distribution with a worst-to-average-case reduction. With small dimensions (n=24, r=6 for MOS-128 at `src/core/params.ts:39-40`) and small noise (σ=2.0, q=7681), algebraic tensor decomposition methods may be practical. Unlike LWE, no reduction from a well-studied lattice problem exists for this construction.
 
 ---
 
-### VULN-007: Zeroization Unreliable in JavaScript
+### HIGH-04: Signing Sub-Key Space Is Exhaustible ❌ CONFIRMED
 
-**File:** `src/utils/constant-time.ts`  
-**Lines:** 203-224  
-**Status:** 🟡 ACKNOWLEDGED
+- **Severity:** HIGH (revalidated 2026-04-11; confirmed)
+- **Status:** ❌ Open — confirmed valid, not patched
+- **File:** `src/sign/index.ts` (parameters: `N_SIG=32, W_SIG=8`)
 
 #### Description
 
-JavaScript's garbage collector may copy buffer contents during compaction. The `zeroize` function clears the original buffer, but copies may persist.
+The signing secret `s' ∈ {-1,0,1}^{32}` has Hamming weight exactly `W_SIG=8`. The total key space is `C(32,8) × 2^8 = 10,518,300 × 256 ≈ 2^31.3` possible secrets. This is exhaustible by a modern laptop in seconds. Even without CRIT-04, an attacker can recover the signing secret by trying all `~2^31` candidates and checking `A'·s_candidate ≡ t' (mod Q_SIG)`.
 
-#### Mitigation
+#### Fix Required
 
-- Best-effort zeroization is implemented
-- Memory-sensitive applications should consider native bindings
-- Document limitation in security considerations
+Increase `N_SIG` to at least 256 and `W_SIG` to at least 64, giving `C(256,64) × 2^64 ≈ 2^249` possible secrets. Adjust `GAMMA_1` and rejection bounds accordingly.
 
----
+#### Revalidation (2026-04-11) — VERDICT: CONFIRMED VALID
 
-- [ ] Test if zeroization prevents heap inspection attacks
-- [ ] Verify optimizer doesn't eliminate zeroization
-- [ ] Check memory dumps for residual secret data
+Independent code review confirms. At `src/sign/index.ts:88-91`: N_SIG=32, W_SIG=8. The `deriveSubSecret` function (lines 146-173) selects exactly 8 distinct positions from 32, each assigned ±1 from a hash-derived sign byte.
 
-#### Recommended Fix
+Key space: C(32,8) x 2^8 = 10,518,300 x 256 = 2,692,684,800 ≈ 2^31.3. After observing one valid signature (which embeds t' in the response at lines 58-59), an attacker extracts t', then brute-forces all ~2.7 billion s' candidates checking `A' · s_candidate ≡ t' (mod 12289)`. Each check is a 32x32 matrix-vector multiply (~1024 multiply-adds). Total: ~2.76 x 10^12 ops — minutes on modern hardware.
 
-- Document limitation
-- Consider using `crypto.subtle` for key operations (uses protected memory)
-- Implement buffer pooling to reduce allocations
+Note: this is a secondary forgery path. CRIT-04 already provides O(1) forgery without needing to recover s' at all.
 
 ---
 
-### VULN-008: Non-Standard SHAKE256 Fallback
+## Structural / Design-Level Concerns
 
-**File:** `src/utils/shake.ts`  
-**Lines:** 82-100  
-**Status:** ✅ MITIGATED
+1. **Defense-in-depth argument is inverted.** The KEM combines three "independent" PKE schemes under the assumption that an attacker must break all three. However, when two or more components are broken (as they are here), the combined system inherits all their weaknesses — the weakest link dominates. Defense-in-depth only helps when all components are individually secure.
 
-#### Description
+2. **Novel hardness assumptions without peer review.** EGRW and TDD as PKE building blocks are not studied in the cryptographic literature. Novel assumptions require extensive peer review and cryptanalysis before use in a security-critical system.
 
-The counter-mode SHA3-256 fallback is not a proven XOF construction. While unlikely to be used on Node.js/Bun, security properties are unverified.
+3. **NIZK proof ZK property is weakened.** ~~The NIZK proof in `src/entanglement/index.ts` was intended to add assurance but instead actively breaks the system (CRIT-01). Removing it would improve security.~~ _Revalidation note: CRIT-01 was determined to be a false positive. The NIZK does not leak shares because the challenge depends on the ephemeral secret. However, the NIZK is not simulator-extractable, which is a cosmetic ZK weakness (not a confidentiality break)._
 
-#### Mitigation / Fix Applied
+4. **Security level estimates are ungrounded.** The `analyzePublicKey()` function outputs concrete bit-security estimates using arithmetic formulas (e.g., `Math.log2(q) * n * w`) with no grounding in actual cryptanalytic work or reduction proofs. These numbers should not be presented to users as meaningful security estimates.
 
-- Added `isNativeShake256Available()` helper to allow application code to detect and enforce native SHAKE256 availability.
-- Added an explicit README note advising production deployments to use native SHAKE256 or a runtime that supports it.
-- Fallback continues to exist for compatibility, but the above mitigations reduce the risk and make it visible to operators.
+5. **Box-Muller is not a discrete Gaussian sampler.** `src/utils/random.ts` uses Box-Muller to approximate Gaussian sampling. This generates a continuous approximation, not a proper discrete Gaussian. For lattice-based schemes, discrete Gaussian sampling is required for correctness of security proofs (e.g., flooding/rejection arguments).
 
-#### Recommendation
-
-For highest assurance, consider adding a configuration flag that causes startup to fail when native SHAKE256 is unavailable.
+6. **JavaScript JIT cannot guarantee constant-time execution.** The constant-time utilities in `src/utils/constant-time.ts` are best-effort. JavaScript's JIT compiler may optimize branches or reorder operations in ways that reintroduce timing side channels. For post-quantum cryptography, constant-time guarantees require native code (Rust/C with explicit volatile or barrier instructions) or WASM with audited compilation.
 
 ---
 
-### VULN-009: NIZK Verification Parameter Naming
+## Overall Verdict
 
-**File:** `src/kem/index.ts` → `src/entanglement/index.ts`  
-**Lines:** 356-360 → 327  
-**Status:** ❌ **FALSE POSITIVE**
+| Finding                                                 | Original Severity | Revalidated Severity | Status            |
+| ------------------------------------------------------- | ----------------- | -------------------- | ----------------- |
+| CRIT-01: NIZK leaks all KEM shares                      | CRITICAL          | **Informational**    | ⚠️ False Positive |
+| CRIT-02: EGRW decryption uses no secret key             | CRITICAL          | **HIGH**             | ❌ Confirmed Open |
+| CRIT-03: TDD decryption uses no secret key              | CRITICAL          | **HIGH**             | ❌ Confirmed Open |
+| CRIT-04: Sigma protocol allows existential forgery      | CRITICAL          | **CRITICAL**         | ❌ Confirmed Open |
+| HIGH-01: SLSS IND-CPA violation via bit equality leak   | HIGH              | **HIGH**             | ❌ Confirmed Open |
+| HIGH-02: EGRW prime too small — BSGS attack in 2^15 ops | HIGH              | **HIGH**             | ❌ Confirmed Open |
+| HIGH-03: TDD has no average-case hardness reduction     | HIGH              | **HIGH**             | ❌ Confirmed Open |
+| HIGH-04: Signing key space exhaustible in 2^31          | HIGH              | **HIGH**             | ❌ Confirmed Open |
 
-#### Description
+**Revalidated effective security assessment (all 8 findings reviewed):**
 
-The `verifyNIZKProof` function parameter is named `messageHash` but receives the raw `recoveredSecret`.
+- **1 false positive:** CRIT-01 (NIZK does NOT leak shares — auditor missed that challenge depends on ephemeral secret)
+- **1 critical, confirmed:** CRIT-04 (signature forgery — root cause deeper than auditor stated: t' is blindly trusted, not just the 1-bit challenge)
+- **6 high, confirmed:** CRIT-02, CRIT-03 (downgraded from CRITICAL), HIGH-01 through HIGH-04
 
-#### Analysis
+**KEM security posture:** Defense-in-depth is broken. EGRW and TDD provide zero confidentiality (CRIT-02, CRIT-03). Even if fixed, EGRW primes are too small (HIGH-02) and TDD lacks a hardness reduction (HIGH-03). SLSS alone provides the only real confidentiality, but its IND-CPA property is violated (HIGH-01). The KEM should not be considered secure.
 
-This is a **naming inconsistency**, not a security vulnerability. Both `generateNIZKProof()` and `verifyNIZKProof()` use the same parameter semantics:
-
-- Both receive the raw message/secret
-- Hashing is done internally with domain separation
-- Verification and generation are symmetric
-
-**No code change required.** Consider renaming parameter to `message` for clarity in a future refactor.
-
----
-
-### VULN-010: SecureBuffer Race Condition Potential
-
-**File:** `src/utils/constant-time.ts`  
-**Lines:** 342-347  
-**Status:** 🔵 NOT APPLICABLE
-
-#### Description
-
-If `zeroize` completes but `disposed` flag not yet set, `clone()` could create a copy of zeroed data.
-
-#### Analysis
-
-JavaScript is single-threaded. This race condition cannot occur in practice without web workers, which are not used in this library.
-
----
-
-## 🔵 LOW SEVERITY / INFORMATIONAL
-
-### VULN-011: Missing Bounds Validation in Deserialization
-
-**Files:** `src/kem/index.ts`, `src/sign/index.ts`  
-**Status:** 🔵 ACKNOWLEDGED
-
-#### Description
-
-Several deserialization functions create TypedArrays from slices without validating alignment or bounds.
-
-#### Mitigation
-
-- Functions will throw on malformed input (fail-safe)
-- Add explicit bounds checks in future hardening pass
-
----
-
-### VULN-012: Large Signature Size Due to Commitments
-
-**File:** `src/sign/index.ts`  
-**Lines:** 582-583  
-**Status:** 🔵 INFORMATIONAL
-
-#### Description
-
-Signatures include raw `w1Commitment` and `w2Commitment`, significantly increasing size.
-
-#### Recommendation
-
-Investigate if commitments can be recomputed during verification. This is a performance/size tradeoff, not a security issue.
-
----
-
-### VULN-013: Cache Timing in Generator Cache
-
-**File:** `src/problems/egrw/index.ts`  
-**Lines:** 41-60  
-**Status:** 🔵 ACKNOWLEDGED (Low Risk)
-
-#### Description
-
-Generator cache creates timing differences between cache hits and misses, potentially leaking parameter information.
-
-#### Mitigation
-
-- Cache is used for public parameters only
-- Does not leak secret key material
-- Accept as minor optimization risk
-
----
-
-## Remediation Summary
-
-### Completed Fixes
-
-| ID       | Issue                 | Status   | Action Taken                                |
-| -------- | --------------------- | -------- | ------------------------------------------- |
-| VULN-001 | TDD plaintext storage | ✅ FIXED | XOR encryption with masked-matrix keystream |
-| VULN-002 | EGRW randomness leak  | ✅ FIXED | Ephemeral walk vertex derivation            |
-| VULN-004 | Modular bias          | ✅ FIXED | Rejection sampling in TDD                   |
-| VULN-014 | Decapsulation oracle  | ✅ FIXED | Safe parsing, implicit-reject, hash-compare |
-
-### Acknowledged Limitations
-
-| ID       | Issue                  | Status           | Notes                                    |
-| -------- | ---------------------- | ---------------- | ---------------------------------------- |
-| VULN-003 | Timing in FO-transform | 🟡 ACKNOWLEDGED  | FO pattern correct, consider WebAssembly |
-| VULN-005 | Integer precision      | 🟡 ACKNOWLEDGED  | Within safe integer range                |
-| VULN-006 | JIT timing variations  | 🟡 ACKNOWLEDGED  | Known JS limitation, documented          |
-| VULN-007 | Zeroization limits     | 🟡 ACKNOWLEDGED  | Best-effort, known GC limitation         |
-| VULN-008 | SHAKE256 fallback      | 🟡 ACKNOWLEDGED  | Rarely triggered, consider warning       |
-| VULN-011 | Bounds validation      | 🔵 ACKNOWLEDGED  | Fails safely on malformed input          |
-| VULN-012 | Signature size         | 🔵 INFORMATIONAL | Performance tradeoff                     |
-| VULN-013 | Cache timing           | 🔵 ACKNOWLEDGED  | Public params only                       |
-
-### False Positives
-
-| ID       | Issue                 | Status            | Notes                                    |
-| -------- | --------------------- | ----------------- | ---------------------------------------- |
-| VULN-009 | NIZK parameter naming | ❌ FALSE POSITIVE | Naming inconsistency, not security issue |
-| VULN-010 | SecureBuffer race     | ❌ NOT APPLICABLE | JS is single-threaded                    |
-
----
-
-## Conclusion
-
-The kMOSAIC implementation has been assessed and critical security issues have been remediated:
-
-1. **VULN-001 (TDD Plaintext):** Now uses XOR encryption with keystream derived from the masked tensor matrix2. **VULN-002 (EGRW randomness exposure):** Now derives ciphertext endpoints from ephemeral walks and does not expose randomness
-2. **VULN-004 (Modular bias):** Rejection sampling implemented in TDD sampling
-3. **VULN-014 (Decapsulation oracle):** Decapsulation hardened to return implicit-reject values on malformed or tampered ciphertexts; added unit tests to verify behavior
-
-Additional improvements:
-
-- Added `isNativeShake256Available()` and README guidance to make SHAKE256 availability explicit for production deployments.
-- Added robust unit tests for malformed/corrupted ciphertext handling: `test/kem-malformed.test.ts` (proof tampering, malformed fragments, truncated ciphertexts, publicKey mismatch).
-
-Overall, the most critical issues have been remediated and the codebase now includes tests that guard against malformed ciphertext behavior and oracle leakage. Continuous monitoring and peer review are recommended for the remaining acknowledged limitations (timing, zeroization limits, and JS runtime concerns).2. **VULN-002 (EGRW Randomness):** Randomness no longer exposed; ephemeral walk vertex used instead 3. **VULN-004 (Modular Bias):** Rejection sampling now ensures uniform distribution
-
-The remaining acknowledged items are primarily JavaScript runtime limitations that are well-documented in the code and do not constitute exploitable vulnerabilities in typical deployment scenarios.
-
-**Post-Fix Status:** All 304 tests pass. The library is now suitable for further security review and testing.
-
----
-
-## Appendix: Files Reviewed
-
-| File                         | Lines | Status              |
-| ---------------------------- | ----- | ------------------- |
-| `src/index.ts`               | 262   | ✅ Reviewed         |
-| `src/types.ts`               | 219   | ✅ Reviewed         |
-| `src/core/params.ts`         | 181   | ✅ Reviewed         |
-| `src/kem/index.ts`           | 824   | ✅ Reviewed         |
-| `src/sign/index.ts`          | 913   | ✅ Reviewed         |
-| `src/utils/constant-time.ts` | 379   | ✅ Reviewed         |
-| `src/utils/random.ts`        | 470   | ✅ Reviewed         |
-| `src/utils/shake.ts`         | 267   | ✅ Reviewed         |
-| `src/problems/slss/index.ts` | 690   | ✅ Reviewed         |
-| `src/problems/tdd/index.ts`  | 540   | ✅ Reviewed + Fixed |
-| `src/problems/egrw/index.ts` | 491   | ✅ Reviewed + Fixed |
-| `src/entanglement/index.ts`  | 489   | ✅ Reviewed         |
-
-**Total Lines Reviewed:** ~5,725
+**Signature security posture:** Existential forgery is possible in O(1) via CRIT-04. Even if CRIT-04 were fixed, the sub-key space is exhaustible in ~2^31 (HIGH-04). The signature scheme should not be used.
